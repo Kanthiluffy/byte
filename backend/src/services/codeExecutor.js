@@ -1,10 +1,15 @@
 const { exec } = require('child_process');
 const fs = require('fs-extra');
 const path = require('path');
+const os = require('os');
 
 class CodeExecutor {
   constructor() {
     this.tempDir = path.join(__dirname, '../../temp');
+    // Check platform and environment variables for executable handling
+    this.isWindows = os.platform() === 'win32';
+    // Allow override via environment variable for containerized deployments
+    this.useWindowsExecutables = process.env.USE_WINDOWS_EXECUTABLES === 'true' || this.isWindows;
     this.ensureTempDir();
   }
 
@@ -26,10 +31,11 @@ class CodeExecutor {
     }
     
     return `${submissionId}_${timestamp}.${extension}`;
-  }
-  getCompileCommand(language, fileName, outputName) {
+  }  getCompileCommand(language, fileName, outputName) {
     const commands = {
-      cpp: `g++ -o ${outputName}.exe ${fileName}`, // Add .exe extension for Windows
+      cpp: this.useWindowsExecutables 
+        ? `g++ -o ${outputName}.exe ${fileName}` // Windows: generate .exe
+        : `g++ -o ${outputName} ${fileName}`,    // Linux: no .exe extension
       java: `javac ${fileName}`
     };
     
@@ -39,13 +45,14 @@ class CodeExecutor {
     const inputFile = `${fileName}.input`;
     const commands = {
       python: `python ${fileName} < ${inputFile}`,
-      cpp: `${outputName}.exe < ${inputFile}`, // Windows executable format
+      cpp: this.useWindowsExecutables 
+        ? `${outputName}.exe < ${inputFile}`  // Windows: run .exe
+        : `./${outputName} < ${inputFile}`,   // Linux: run without extension, with ./
       java: `java Solution < ${inputFile}` // Use the class name directly
     };
     
     return commands[language];
   }
-
   async executeCode(code, language, testCases, timeLimit = 5000) {
     const submissionId = Date.now().toString();
     const fileName = this.generateFileName(language, submissionId);
@@ -54,6 +61,22 @@ class CodeExecutor {
     const outputPath = path.join(this.tempDir, outputName);
 
     try {
+      // Check if the required language tools are available
+      const isLanguageAvailable = await this.checkLanguageAvailability(language);
+      if (!isLanguageAvailable) {
+        const languageNames = {
+          python: 'Python',
+          cpp: 'C++ (g++)',
+          java: 'Java (JDK)'
+        };
+        
+        return {
+          status: 'System Error',
+          error: `${languageNames[language] || language} is not installed on this server. Please contact the administrator.`,
+          testCaseResults: []
+        };
+      }
+
       // Write code to file
       await fs.writeFile(filePath, code);
 
@@ -210,8 +233,7 @@ class CodeExecutor {
         reject({ code: 'ERROR', message: err.message });
       });
     });
-  }
-  async cleanup(filePath, outputPath) {
+  }  async cleanup(filePath, outputPath) {
     try {
       if (await fs.pathExists(filePath)) {
         await fs.remove(filePath);
@@ -219,11 +241,18 @@ class CodeExecutor {
       if (await fs.pathExists(outputPath)) {
         await fs.remove(outputPath);
       }
-      // Clean up Windows executable files (.exe)
-      const exeFile = `${outputPath}.exe`;
-      if (await fs.pathExists(exeFile)) {
-        await fs.remove(exeFile);
+        // Clean up executable files (platform-specific)
+      if (this.useWindowsExecutables) {
+        // Windows: clean up .exe files
+        const exeFile = `${outputPath}.exe`;
+        if (await fs.pathExists(exeFile)) {
+          await fs.remove(exeFile);
+        }
+      } else {
+        // Linux: clean up executable without extension (already handled above)
+        // No additional cleanup needed for Linux executables
       }
+      
       // Clean up Java class files
       const dir = path.dirname(filePath);
       if (path.parse(filePath).name === 'Solution') {
@@ -247,6 +276,24 @@ class CodeExecutor {
       }
     } catch (error) {
       console.error('Cleanup error:', error);
+    }
+  }
+
+  async checkLanguageAvailability(language) {
+    const checkCommands = {
+      python: 'python --version',
+      cpp: 'g++ --version',
+      java: 'javac -version'
+    };
+    
+    const command = checkCommands[language];
+    if (!command) return true; // Unknown language, let it proceed
+    
+    try {
+      await this.runCommand(command, this.tempDir, 5000);
+      return true;
+    } catch (error) {
+      return false;
     }
   }
 }
