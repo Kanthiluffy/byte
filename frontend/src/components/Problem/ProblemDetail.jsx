@@ -4,7 +4,6 @@ import { Editor } from '@monaco-editor/react';
 import toast from 'react-hot-toast';
 import { problemsAPI, submissionsAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
-import './ProblemDetail.css';
 
 const ProblemDetail = () => {
   const { id } = useParams();
@@ -26,7 +25,6 @@ const ProblemDetail = () => {
       setLoading(true);
       const response = await problemsAPI.getById(id);
       setProblem(response.data);
-        // Set default code template based on language
       updateCodeTemplate('python');
     } catch (err) {
       setError('Failed to fetch problem details');
@@ -34,7 +32,9 @@ const ProblemDetail = () => {
     } finally {
       setLoading(false);
     }
-  };  const updateCodeTemplate = (lang) => {
+  };
+
+  const updateCodeTemplate = (lang) => {
     const templates = {
       python: `# Write your solution here
 def solution():
@@ -51,25 +51,17 @@ int main() {
     public static void main(String[] args) {
         // Write your solution here
     }
+}`,
+      javascript: `// Write your solution here
+function solution() {
+    // Your code here
+    return result;
 }`
     };
     
+    setLanguage(lang);
     setCode(templates[lang] || templates.python);
-  };
-  const getMonacoLanguage = (lang) => {
-    switch (lang) {
-      case 'python': return 'python';
-      case 'cpp': return 'cpp';
-      case 'java': return 'java';
-      default: return 'python';
-    }
-  };
-
-  const handleLanguageChange = (newLanguage) => {
-    setLanguage(newLanguage);
-    updateCodeTemplate(newLanguage);
-  };
-  const handleSubmit = async () => {
+  };  const handleSubmit = async () => {
     if (!code.trim()) {
       toast.error('Please write some code before submitting');
       return;
@@ -77,251 +69,391 @@ int main() {
 
     try {
       setSubmitting(true);
-      setSubmissionResult(null);
       
-      toast.loading('Submitting your code...', { id: 'submit' });
-      
-      const response = await submissionsAPI.submit({
+      // Submit code and get submission ID
+      const submitResponse = await submissionsAPI.submit({
         problemId: id,
         code,
         language
       });
-
-      const submissionId = response.data.submissionId;
       
-      toast.success('Code submitted! Evaluating...', { id: 'submit' });
+      const submissionId = submitResponse.data.submissionId;
+      
+      // Show initial feedback
+      toast.success('Code submitted! Executing...');
+      
+      // Set initial pending state
+      setSubmissionResult({
+        status: 'RUNNING',
+        output: null,
+        error: null,
+        executionTime: null,
+        memoryUsed: null
+      });
       
       // Poll for results
       pollSubmissionResult(submissionId);
+      
     } catch (err) {
-      toast.error('Failed to submit code: ' + (err.response?.data?.message || err.message), { id: 'submit' });
+      toast.error('Failed to submit solution');
+      console.error(err);
+      setSubmitting(false);
+    }
+  };
+
+  const pollSubmissionResult = async (submissionId, attempts = 0) => {
+    const maxAttempts = 30; // Poll for up to 30 seconds
+    
+    if (attempts >= maxAttempts) {
+      toast.error('Execution timeout - please try again');
+      setSubmitting(false);
+      return;
+    }
+    
+    try {
+      const response = await submissionsAPI.getById(submissionId);
+      const submission = response.data;
+      
+      if (submission.status === 'Running' || submission.status === 'Pending') {
+        // Still executing, poll again after 1 second
+        setTimeout(() => pollSubmissionResult(submissionId, attempts + 1), 1000);
+        return;
+      }
+      
+      // Execution completed
+      setSubmissionResult({
+        status: submission.status.toUpperCase(),
+        output: submission.testCaseResults?.[0]?.output || 'No output',
+        error: submission.compilationError || null,
+        executionTime: submission.executionTime,
+        memoryUsed: null, // Not tracked in current backend
+        passedTestCases: submission.passedTestCases,
+        totalTestCases: submission.totalTestCases
+      });
+      
+      if (submission.status === 'Accepted') {
+        toast.success('Solution Accepted! 🎉');
+      } else {
+        toast.error(`Solution ${submission.status}`);
+      }
+      
+    } catch (err) {
+      console.error('Error polling submission:', err);
+      toast.error('Error checking submission status');
     } finally {
       setSubmitting(false);
     }
   };
-  const pollSubmissionResult = async (submissionId) => {
-    const maxAttempts = 30; // 30 seconds max
-    let attempts = 0;
 
-    const poll = async () => {
-      try {
-        const response = await submissionsAPI.getById(submissionId);
-        const result = response.data;
-
-        if (result.status !== 'Pending' && result.status !== 'Running') {
-          setSubmissionResult(result);
-          
-          // Show appropriate toast based on result
-          if (result.status === 'Accepted') {
-            toast.success('🎉 Congratulations! Your solution is correct!');
-          } else if (result.status === 'Wrong Answer') {
-            toast.error('Wrong Answer - Check your logic');
-          } else if (result.status === 'Time Limit Exceeded') {
-            toast.error('Time Limit Exceeded - Optimize your solution');
-          } else if (result.status === 'Compilation Error') {
-            toast.error('Compilation Error - Check your syntax');
-          } else {
-            toast.error(`Submission failed: ${result.status}`);
-          }
-          return;
-        }
-
-        attempts++;
-        if (attempts < maxAttempts) {
-          setTimeout(poll, 1000); // Poll every second
-        } else {
-          setSubmissionResult({ status: 'Timeout', error: 'Submission timed out' });
-          toast.error('Submission timed out - Please try again');
-        }
-      } catch (err) {
-        console.error('Error polling submission:', err);
-        setSubmissionResult({ status: 'Error', error: 'Failed to get submission result' });
-        toast.error('Failed to get submission result');
-      }
+  const formatDifficulty = (difficulty) => {
+    const colors = {
+      easy: 'bg-green-100 text-green-800 border-green-200',
+      medium: 'bg-yellow-100 text-yellow-800 border-yellow-200', 
+      hard: 'bg-red-100 text-red-800 border-red-200'
     };
-
-    poll();
+    return colors[difficulty?.toLowerCase()] || colors.medium;
   };
 
-  const getDifficultyColor = (difficulty) => {
-    switch (difficulty) {
-      case 'Easy': return '#27ae60';
-      case 'Medium': return '#f39c12';
-      case 'Hard': return '#e74c3c';
-      default: return '#95a5a6';
+  const renderExamples = () => {
+    if (!problem?.examples?.length) return null;
+
+    return (
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Examples</h3>
+        {problem.examples.map((example, index) => (
+          <div key={index} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+            <div className="space-y-3">
+              <div>
+                <span className="font-medium text-gray-700 dark:text-gray-300">Input:</span>
+                <div className="mt-1 bg-white dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-600 p-2">
+                  <code className="text-sm text-gray-900 dark:text-gray-100 font-mono">{example.input}</code>
+                </div>
+              </div>
+              <div>
+                <span className="font-medium text-gray-700 dark:text-gray-300">Output:</span>
+                <div className="mt-1 bg-white dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-600 p-2">
+                  <code className="text-sm text-gray-900 dark:text-gray-100 font-mono">{example.output}</code>
+                </div>
+              </div>
+              {example.explanation && (
+                <div>
+                  <span className="font-medium text-gray-700 dark:text-gray-300">Explanation:</span>
+                  <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{example.explanation}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+  const renderConstraints = () => {
+    // Fix: constraints is a string in the backend, not an array
+    if (!problem?.constraints || typeof problem.constraints !== 'string' || problem.constraints.trim().length === 0) {
+      return null;
     }
+
+    // Split constraints by line breaks or semicolons to display as a list
+    const constraintsList = problem.constraints
+      .split(/[\n;]/)
+      .map(c => c.trim())
+      .filter(c => c.length > 0);
+
+    if (constraintsList.length === 0) return null;
+
+    return (
+      <div className="space-y-3">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Constraints</h3>
+        {constraintsList.length === 1 ? (
+          // If it's just one constraint, display as paragraph
+          <p className="text-sm text-gray-600 dark:text-gray-400">{constraintsList[0]}</p>
+        ) : (
+          // If multiple constraints, display as list
+          <ul className="list-disc list-inside space-y-1 text-sm text-gray-600 dark:text-gray-400">
+            {constraintsList.map((constraint, index) => (
+              <li key={index}>{constraint}</li>
+            ))}
+          </ul>
+        )}
+      </div>
+    );
+  };
+  const renderSubmissionResult = () => {
+    if (!submissionResult) return null;
+
+    const statusColors = {
+      ACCEPTED: 'text-green-600 bg-green-50 border-green-200',
+      WRONG_ANSWER: 'text-red-600 bg-red-50 border-red-200',
+      TIME_LIMIT_EXCEEDED: 'text-yellow-600 bg-yellow-50 border-yellow-200',
+      RUNTIME_ERROR: 'text-red-600 bg-red-50 border-red-200',
+      COMPILATION_ERROR: 'text-orange-600 bg-orange-50 border-orange-200',
+      RUNNING: 'text-blue-600 bg-blue-50 border-blue-200',
+      PENDING: 'text-gray-600 bg-gray-50 border-gray-200'
+    };
+
+    return (
+      <div className="mt-6 p-4 border-l-4 border-blue-500 bg-blue-50 dark:bg-blue-900/20">
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Submission Result</h4>
+          <div className="flex items-center space-x-2">
+            {submissionResult.status === 'RUNNING' && (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+            )}
+            <span className={`px-3 py-1 rounded-full text-sm font-medium border ${statusColors[submissionResult.status] || 'text-gray-600 bg-gray-50 border-gray-200'}`}>
+              {submissionResult.status === 'RUNNING' ? 'Executing...' : submissionResult.status.replace('_', ' ')}
+            </span>
+          </div>
+        </div>
+        
+        {/* Test case results */}
+        {submissionResult.passedTestCases !== undefined && submissionResult.totalTestCases !== undefined && (
+          <div className="mb-3">
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-medium text-gray-700 dark:text-gray-300">Test Cases:</span>
+              <span className={`font-medium ${submissionResult.passedTestCases === submissionResult.totalTestCases ? 'text-green-600' : 'text-red-600'}`}>
+                {submissionResult.passedTestCases}/{submissionResult.totalTestCases} passed
+              </span>
+            </div>
+            <div className="mt-1 w-full bg-gray-200 rounded-full h-2">
+              <div 
+                className={`h-2 rounded-full ${submissionResult.passedTestCases === submissionResult.totalTestCases ? 'bg-green-500' : 'bg-red-500'}`}
+                style={{ width: `${(submissionResult.passedTestCases / submissionResult.totalTestCases) * 100}%` }}
+              ></div>
+            </div>
+          </div>
+        )}
+        
+        {submissionResult.output && submissionResult.status !== 'RUNNING' && (
+          <div className="mb-3">
+            <h5 className="font-medium text-gray-700 dark:text-gray-300 mb-2">Output:</h5>
+            <pre className="bg-gray-100 dark:bg-gray-800 p-3 rounded text-sm overflow-x-auto text-gray-900 dark:text-gray-100 font-mono">
+              {submissionResult.output}
+            </pre>
+          </div>
+        )}
+        
+        {submissionResult.error && (
+          <div className="mb-3">
+            <h5 className="font-medium text-red-700 dark:text-red-300 mb-2">Error:</h5>
+            <pre className="bg-red-50 dark:bg-red-900/20 p-3 rounded text-sm overflow-x-auto text-red-900 dark:text-red-100 font-mono border border-red-200 dark:border-red-800">
+              {submissionResult.error}
+            </pre>
+          </div>
+        )}
+        
+        {submissionResult.status !== 'RUNNING' && (
+          <div className="grid grid-cols-2 gap-4 text-sm text-gray-600 dark:text-gray-400">
+            <div>
+              <span className="font-medium">Execution Time:</span> {submissionResult.executionTime || 'N/A'}ms
+            </div>
+            <div>
+              <span className="font-medium">Memory Used:</span> {submissionResult.memoryUsed || 'N/A'}KB
+            </div>
+          </div>
+        )}
+      </div>
+    );
   };
 
   if (loading) {
     return (
-      <div className="loading-container">
-        <div className="loading-spinner">Loading problem...</div>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600 dark:text-gray-400">Loading problem...</p>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="error-container">
-        <div className="error-message">{error}</div>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-red-500 text-6xl mb-4">⚠️</div>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Error</h2>
+          <p className="text-gray-600 dark:text-gray-400">{error}</p>
+        </div>
       </div>
     );
   }
 
   if (!problem) {
     return (
-      <div className="error-container">
-        <div className="error-message">Problem not found</div>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-gray-400 text-6xl mb-4">🔍</div>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Problem Not Found</h2>
+          <p className="text-gray-600 dark:text-gray-400">The requested problem could not be found.</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="problem-detail">
-      <div className="problem-layout">
-        {/* Problem Description */}
-        <div className="problem-description">
-          <div className="problem-header">
-            <h1>{problem.title}</h1>
-            <span 
-              className="difficulty-badge"
-              style={{ backgroundColor: getDifficultyColor(problem.difficulty) }}
-            >
-              {problem.difficulty}
-            </span>
-          </div>
-
-          <div className="problem-content">
-            <div className="section">
-              <h3>Description</h3>
-              <div className="description-text">
-                {problem.description}
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Header */}
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{problem.title}</h1>
+              <div className="flex items-center mt-2 space-x-4">
+                <span className={`px-3 py-1 rounded-full text-sm font-medium border ${formatDifficulty(problem.difficulty)}`}>
+                  {problem.difficulty?.charAt(0).toUpperCase() + problem.difficulty?.slice(1)}
+                </span>
+                {problem.tags && Array.isArray(problem.tags) && problem.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {problem.tags.map((tag, index) => (
+                      <span key={index} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full border border-blue-200">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
-
-            {problem.examples && problem.examples.length > 0 && (
-              <div className="section">
-                <h3>Examples</h3>
-                {problem.examples.map((example, index) => (
-                  <div key={index} className="example">
-                    <h4>Example {index + 1}:</h4>
-                    <div className="example-content">
-                      <div><strong>Input:</strong> {example.input}</div>
-                      <div><strong>Output:</strong> {example.output}</div>
-                      {example.explanation && (
-                        <div><strong>Explanation:</strong> {example.explanation}</div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {problem.constraints && (
-              <div className="section">
-                <h3>Constraints</h3>
-                <div className="constraints-text">
-                  {problem.constraints}
-                </div>
-              </div>
-            )}
           </div>
         </div>
+      </div>
 
-        {/* Code Editor */}
-        <div className="code-section">
-          <div className="editor-header">            <div className="language-selector">
-              <label>Language:</label>
-              <select value={language} onChange={(e) => handleLanguageChange(e.target.value)}>
-                <option value="python">Python</option>
-                <option value="cpp">C++</option>
-                <option value="java">Java</option>
-              </select>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Problem Description */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+            <div className="p-6 space-y-6">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">Problem Description</h2>
+                <div className="prose max-w-none text-gray-700 dark:text-gray-300">
+                  <p className="whitespace-pre-wrap">{problem.description}</p>
+                </div>
+              </div>
+
+              {renderExamples()}
+              {renderConstraints()}
             </div>
-            
-            <button 
-              onClick={handleSubmit}
-              disabled={submitting}
-              className="submit-button"
-            >
-              {submitting ? 'Submitting...' : 'Submit Code'}
-            </button>
-          </div>          <div className="monaco-editor-container">
-            <Editor
-              height="400px"
-              language={getMonacoLanguage(language)}
-              value={code}
-              onChange={(value) => setCode(value || '')}
-              theme="vs-dark"
-              options={{
-                minimap: { enabled: false },
-                fontSize: 14,
-                wordWrap: 'on',
-                automaticLayout: true,
-                scrollBeyondLastLine: false,
-                renderLineHighlight: 'line',
-                selectOnLineNumbers: true,
-                roundedSelection: false,
-                readOnly: false,
-                cursorStyle: 'line',
-                glyphMargin: true,
-                folding: true,
-                lineNumbers: 'on',
-                lineDecorationsWidth: 10,
-                lineNumbersMinChars: 3,
-                tabSize: 2,
-                insertSpaces: true
-              }}
-            />
           </div>
 
-          {/* Submission Result */}
-          {submissionResult && (
-            <div className="submission-result">
-              <h3>Submission Result</h3>
-              <div className={`result-status ${submissionResult.status.toLowerCase().replace(/\s+/g, '-')}`}>
-                Status: {submissionResult.status}
+          {/* Code Editor and Submission */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Code Editor</h2>
+                <div className="flex items-center space-x-3">
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Language:</label>
+                  <select
+                    value={language}
+                    onChange={(e) => updateCodeTemplate(e.target.value)}
+                    className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                  >
+                    <option value="python">Python</option>
+                    <option value="cpp">C++</option>
+                    <option value="java">Java</option>
+                    <option value="javascript">JavaScript</option>
+                  </select>
+                </div>
               </div>
-              
-              {submissionResult.status === 'Accepted' && (
-                <div className="success-message">
-                  🎉 Congratulations! Your solution is correct!
+
+              <div className="border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
+                <Editor
+                  height="400px"
+                  language={language === 'cpp' ? 'cpp' : language}
+                  value={code}
+                  onChange={setCode}
+                  theme="vs-dark"
+                  options={{
+                    minimap: { enabled: false },
+                    fontSize: 14,
+                    lineNumbers: 'on',
+                    wordWrap: 'on',
+                    automaticLayout: true,
+                    scrollBeyondLastLine: false,
+                    renderLineHighlight: 'line',
+                    selectOnLineNumbers: true,
+                    cursorStyle: 'line',
+                    glyphMargin: false,
+                    folding: false,
+                    lineDecorationsWidth: 0,
+                    lineNumbersMinChars: 3
+                  }}
+                />
+              </div>
+
+              <div className="mt-6 flex justify-between items-center">
+                <div className="text-sm text-gray-500 dark:text-gray-400">
+                  Press Ctrl+Enter to submit
                 </div>
-              )}
-              
-              {submissionResult.compilationError && (
-                <div className="error-details">
-                  <h4>Compilation Error:</h4>
-                  <pre>{submissionResult.compilationError}</pre>
-                </div>
-              )}
-              
-              {submissionResult.testCaseResults && submissionResult.testCaseResults.length > 0 && (
-                <div className="test-results">
-                  <h4>Test Results:</h4>
-                  <div className="test-summary">
-                    Passed: {submissionResult.passedTestCases || 0} / {submissionResult.totalTestCases || 0}
-                  </div>
-                  
-                  {submissionResult.testCaseResults.slice(0, 3).map((result, index) => (
-                    <div key={index} className={`test-case ${result.passed ? 'passed' : 'failed'}`}>
-                      <div className="test-case-header">
-                        Test Case {index + 1}: {result.passed ? '✅ Passed' : '❌ Failed'}
-                      </div>
-                      {!result.passed && (
-                        <div className="test-case-details">
-                          <div><strong>Input:</strong> {result.input}</div>
-                          <div><strong>Expected:</strong> {result.expectedOutput}</div>
-                          <div><strong>Your Output:</strong> {result.actualOutput || 'No output'}</div>
-                          {result.error && <div><strong>Error:</strong> {result.error}</div>}
-                        </div>
-                      )}
+                <button
+                  onClick={handleSubmit}
+                  disabled={submitting || !user}
+                  className={`px-6 py-2 rounded-lg font-medium transition-colors ${
+                    submitting || !user
+                      ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                      : 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:shadow-md'
+                  }`}
+                >
+                  {submitting ? (
+                    <div className="flex items-center">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Submitting...
                     </div>
-                  ))}
+                  ) : (
+                    'Submit Solution'
+                  )}
+                </button>
+              </div>
+
+              {!user && (
+                <div className="mt-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                  <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                    Please log in to submit your solution.
+                  </p>
                 </div>
               )}
+
+              {renderSubmissionResult()}
             </div>
-          )}
+          </div>
         </div>
       </div>
     </div>

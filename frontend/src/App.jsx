@@ -12,15 +12,18 @@ import AdminDashboard from './components/Admin/AdminDashboard';
 import Profile from './components/Profile/Profile';
 import AuthCallback from './components/Auth/AuthCallback';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
-import './App.css';
 
 function App() {
   return (
     <AuthProvider>
       <Router>
-        <div className="app">
+        <div className="min-h-screen bg-red-500 text-white">
+          {/* TAILWIND TEST - This should show red background and white text */}
+          <div className="p-4 bg-blue-600 text-yellow-300 text-center font-bold">
+            TAILWIND TEST: If you see this in blue with yellow text, Tailwind is working!
+          </div>
           <Navbar />
-          <main className="main-content">
+          <main>
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/login" element={<Login />} />
@@ -67,8 +70,19 @@ function App() {
             toastOptions={{
               duration: 4000,
               style: {
-                background: '#363636',
+                background: '#1f2937',
                 color: '#fff',
+                border: '1px solid #374151',
+              },
+              success: {
+                style: {
+                  background: '#059669',
+                },
+              },
+              error: {
+                style: {
+                  background: '#dc2626',
+                },
               },
             }}
           />
