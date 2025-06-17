@@ -15,10 +15,35 @@ const ProblemDetail = () => {
   const [language, setLanguage] = useState('python');
   const [submitting, setSubmitting] = useState(false);
   const [submissionResult, setSubmissionResult] = useState(null);
-
+  const [isFullscreen, setIsFullscreen] = useState(false);
   useEffect(() => {
     fetchProblem();
   }, [id]);
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyPress = (e) => {
+      // Ctrl+Enter to submit
+      if (e.ctrlKey && e.key === 'Enter') {
+        e.preventDefault();
+        if (!submitting && user) {
+          handleSubmit();
+        }
+      }
+      // F11 for fullscreen
+      if (e.key === 'F11') {
+        e.preventDefault();
+        setIsFullscreen(!isFullscreen);
+      }
+      // Escape to exit fullscreen
+      if (e.key === 'Escape' && isFullscreen) {
+        e.preventDefault();
+        setIsFullscreen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [submitting, user, isFullscreen]);
 
   const fetchProblem = async () => {
     try {
@@ -355,12 +380,92 @@ function solution() {
             </div>
           </div>
         </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      </div>      {isFullscreen ? (
+        // Fullscreen Code Editor
+        <div className="fixed inset-0 z-50 bg-white dark:bg-gray-800">
+          <div className="h-full flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{problem.title} - Code Editor</h2>
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={() => setIsFullscreen(false)}
+                  className="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+                  title="Exit Fullscreen"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Language:</label>
+                <select
+                  value={language}
+                  onChange={(e) => updateCodeTemplate(e.target.value)}
+                  className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                >
+                  <option value="python">Python</option>
+                  <option value="cpp">C++</option>
+                  <option value="java">Java</option>
+                  <option value="javascript">JavaScript</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex-1">
+              <Editor
+                height="100%"
+                language={language === 'cpp' ? 'cpp' : language}
+                value={code}
+                onChange={setCode}
+                theme="vs-dark"
+                options={{
+                  minimap: { enabled: true },
+                  fontSize: 16,
+                  lineNumbers: 'on',
+                  wordWrap: 'on',
+                  automaticLayout: true,
+                  scrollBeyondLastLine: false,
+                  renderLineHighlight: 'line',
+                  selectOnLineNumbers: true,
+                  cursorStyle: 'line',
+                  glyphMargin: false,
+                  folding: true,
+                  lineDecorationsWidth: 0,
+                  lineNumbersMinChars: 3,
+                  tabSize: 2,
+                  insertSpaces: true
+                }}
+              />
+            </div>
+            <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex justify-between items-center">
+              <div className="text-sm text-gray-500 dark:text-gray-400">
+                Press Ctrl+Enter to submit • F11 for fullscreen • Esc to exit
+              </div>
+              <button
+                onClick={handleSubmit}
+                disabled={submitting || !user}
+                className={`px-6 py-2 rounded-lg font-medium transition-colors ${
+                  submitting || !user
+                    ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                    : 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:shadow-md'
+                }`}
+              >
+                {submitting ? (
+                  <div className="flex items-center">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Submitting...
+                  </div>
+                ) : (
+                  'Submit Solution'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        // Normal Split Layout
+        <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="grid grid-cols-1 xl:grid-cols-5 gap-8">
           {/* Problem Description */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+          <div className="xl:col-span-2 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
             <div className="p-6 space-y-6">
               <div>
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">Problem Description</h2>
@@ -375,11 +480,25 @@ function solution() {
           </div>
 
           {/* Code Editor and Submission */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
+          <div className="xl:col-span-3 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+            <div className="p-6">              <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Code Editor</h2>
                 <div className="flex items-center space-x-3">
+                  <button
+                    onClick={() => setIsFullscreen(!isFullscreen)}
+                    className="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+                    title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+                  >
+                    {isFullscreen ? (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                      </svg>
+                    )}
+                  </button>
                   <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Language:</label>
                   <select
                     value={language}
@@ -392,11 +511,9 @@ function solution() {
                     <option value="javascript">JavaScript</option>
                   </select>
                 </div>
-              </div>
-
-              <div className="border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
+              </div><div className="border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
                 <Editor
-                  height="400px"
+                  height="600px"
                   language={language === 'cpp' ? 'cpp' : language}
                   value={code}
                   onChange={setCode}
@@ -412,9 +529,11 @@ function solution() {
                     selectOnLineNumbers: true,
                     cursorStyle: 'line',
                     glyphMargin: false,
-                    folding: false,
+                    folding: true,
                     lineDecorationsWidth: 0,
-                    lineNumbersMinChars: 3
+                    lineNumbersMinChars: 3,
+                    tabSize: 2,
+                    insertSpaces: true
                   }}
                 />
               </div>
@@ -449,13 +568,12 @@ function solution() {
                     Please log in to submit your solution.
                   </p>
                 </div>
-              )}
-
-              {renderSubmissionResult()}
+              )}              {renderSubmissionResult()}
             </div>
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 };
