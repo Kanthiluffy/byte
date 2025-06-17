@@ -10,10 +10,8 @@ class CodeExecutor {
 
   async ensureTempDir() {
     await fs.ensureDir(this.tempDir);
-  }
-  generateFileName(language, submissionId) {
+  }  generateFileName(language, submissionId) {
     const extensions = {
-      javascript: 'js',
       python: 'py',
       cpp: 'cpp',
       java: 'java'
@@ -40,7 +38,6 @@ class CodeExecutor {
     // Create input file for cleaner input handling
     const inputFile = `${fileName}.input`;
     const commands = {
-      javascript: `node ${fileName} < ${inputFile}`,
       python: `python ${fileName} < ${inputFile}`,
       cpp: `${outputName}.exe < ${inputFile}`, // Windows executable format
       java: `java Solution < ${inputFile}` // Use the class name directly

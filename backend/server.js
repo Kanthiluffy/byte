@@ -8,6 +8,7 @@ const authRoutes = require('./src/routes/auth');
 const problemRoutes = require('./src/routes/problems');
 const submissionRoutes = require('./src/routes/submissions');
 const adminRoutes = require('./src/routes/admin');
+const profileRoutes = require('./src/routes/profile');
 
 const app = express();
 
@@ -36,6 +37,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/problems', problemRoutes);
 app.use('/api/submissions', submissionRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/profile', profileRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

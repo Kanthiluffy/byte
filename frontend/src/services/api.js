@@ -53,9 +53,20 @@ export const authAPI = {
   googleAuth: () => `${API_URL}/api/auth/google`
 };
 
+// Profile API
+export const profileAPI = {
+  getProfile: () => axios.get('/api/profile/me'),
+  getPublicProfile: (id) => axios.get(`/api/profile/${id}`),
+  updateProfile: (data) => axios.put('/api/profile/me', data),
+  changePassword: (data) => axios.put('/api/profile/change-password', data),
+  updateStats: (data) => axios.put('/api/profile/stats', data),
+  updateAvatar: (data) => axios.put('/api/profile/avatar', data)
+};
+
 export default {
   problems: problemsAPI,
   submissions: submissionsAPI,
   admin: adminAPI,
-  auth: authAPI
+  auth: authAPI,
+  profile: profileAPI
 };

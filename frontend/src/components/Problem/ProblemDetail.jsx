@@ -13,7 +13,7 @@ const ProblemDetail = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [code, setCode] = useState('// Write your solution here\n');
-  const [language, setLanguage] = useState('javascript');
+  const [language, setLanguage] = useState('python');
   const [submitting, setSubmitting] = useState(false);
   const [submissionResult, setSubmissionResult] = useState(null);
 
@@ -26,23 +26,16 @@ const ProblemDetail = () => {
       setLoading(true);
       const response = await problemsAPI.getById(id);
       setProblem(response.data);
-      
-      // Set default code template based on language
-      updateCodeTemplate('javascript');
+        // Set default code template based on language
+      updateCodeTemplate('python');
     } catch (err) {
       setError('Failed to fetch problem details');
       console.error(err);
     } finally {
       setLoading(false);
     }
-  };
-  const updateCodeTemplate = (lang) => {
+  };  const updateCodeTemplate = (lang) => {
     const templates = {
-      javascript: `// Write your solution here
-function solution() {
-    // Your code here
-    return result;
-}`,
       python: `# Write your solution here
 def solution():
     # Your code here
@@ -61,16 +54,14 @@ int main() {
 }`
     };
     
-    setCode(templates[lang] || templates.javascript);
+    setCode(templates[lang] || templates.python);
   };
-
   const getMonacoLanguage = (lang) => {
     switch (lang) {
-      case 'javascript': return 'javascript';
       case 'python': return 'python';
       case 'cpp': return 'cpp';
       case 'java': return 'java';
-      default: return 'javascript';
+      default: return 'python';
     }
   };
 
@@ -239,11 +230,9 @@ int main() {
 
         {/* Code Editor */}
         <div className="code-section">
-          <div className="editor-header">
-            <div className="language-selector">
+          <div className="editor-header">            <div className="language-selector">
               <label>Language:</label>
               <select value={language} onChange={(e) => handleLanguageChange(e.target.value)}>
-                <option value="javascript">JavaScript</option>
                 <option value="python">Python</option>
                 <option value="cpp">C++</option>
                 <option value="java">Java</option>

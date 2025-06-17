@@ -1,0 +1,58 @@
+/* Theme Toggle Styles */
+.theme-toggle {
+  background: var(--card-background);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  padding: 0.5rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  width: 2.5rem;
+  height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.theme-toggle:hover {
+  background: var(--hover-background);
+  transform: scale(1.05);
+}
+
+.theme-toggle-icon {
+  font-size: 1.2rem;
+  transition: transform var(--transition-fast);
+}
+
+.theme-toggle:hover .theme-toggle-icon {
+  transform: rotate(20deg);
+}
+
+/* Dark Theme Variables */
+:root[data-theme="dark"] {
+  /* Override light theme colors */
+  --background: #0a0a0a;
+  --surface: #111111;
+  --card-background: #1a1a1a;
+  --text-primary: #ffffff;
+  --text-secondary: #a3a3a3;
+  --text-muted: #737373;
+  --border-color: #262626;
+  --hover-background: #262626;
+  
+  /* Primary colors for dark theme */
+  --primary-500: #60a5fa;
+  --primary-600: #3b82f6;
+  --primary-700: #2563eb;
+  
+  /* Status colors for dark theme */
+  --success-500: #22c55e;
+  --warning-500: #f59e0b;
+  --error-500: #ef4444;
+}
+
+/* Ensure smooth transitions when switching themes */
+* {
+  transition: background-color var(--transition-normal), 
+              color var(--transition-normal),
+              border-color var(--transition-normal);
+}

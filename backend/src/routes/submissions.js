@@ -1,6 +1,7 @@
 const express = require('express');
 const Submission = require('../models/Submission');
 const Problem = require('../models/Problem');
+const User = require('../models/User');
 const { auth } = require('../middleware/auth');
 const codeExecutor = require('../services/codeExecutor');
 
@@ -243,15 +244,16 @@ async function executeSubmission(submission, problem) {
     // Calculate score
     submission.calculateScore();
 
-    await submission.save();
-
-    // Update problem statistics
+    await submission.save();    // Update problem statistics
     problem.totalSubmissions = (problem.totalSubmissions || 0) + 1;
     if (result.status === 'Accepted') {
       problem.successfulSubmissions = (problem.successfulSubmissions || 0) + 1;
     }
     problem.updateAcceptanceRate();
     await problem.save();
+
+    // Update user statistics
+    await updateUserStats(submission.userId, problem.difficulty, result.status === 'Accepted');
 
   } catch (error) {
     console.error('Execute submission error:', error);
@@ -270,6 +272,46 @@ async function executeSubmission(submission, problem) {
     } catch (saveError) {
       console.error('Failed to save submission error state:', saveError);
     }
+  }
+}
+
+// Function to update user statistics
+async function updateUserStats(userId, problemDifficulty, isSuccess) {
+  try {
+    const user = await User.findById(userId);
+    if (!user) return;
+
+    // Update submission stats
+    user.stats.totalSubmissions = (user.stats.totalSubmissions || 0) + 1;
+    
+    if (isSuccess) {
+      user.stats.successfulSubmissions = (user.stats.successfulSubmissions || 0) + 1;
+      
+      // Check if this is the first time solving this specific problem
+      // (In a full implementation, you'd track solved problems separately)
+      
+      // Update difficulty-specific stats
+      switch (problemDifficulty) {
+        case 'Easy':
+          user.stats.easyProblems = (user.stats.easyProblems || 0) + 1;
+          break;
+        case 'Medium':
+          user.stats.mediumProblems = (user.stats.mediumProblems || 0) + 1;
+          break;
+        case 'Hard':
+          user.stats.hardProblems = (user.stats.hardProblems || 0) + 1;
+          break;
+      }
+      
+      // Update total problems solved
+      user.stats.problemsSolved = (user.stats.easyProblems || 0) + 
+                                   (user.stats.mediumProblems || 0) + 
+                                   (user.stats.hardProblems || 0);
+    }
+
+    await user.save();
+  } catch (error) {
+    console.error('Error updating user stats:', error);
   }
 }
 

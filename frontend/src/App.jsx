@@ -9,6 +9,7 @@ import Register from './components/Auth/Register';
 import Dashboard from './components/Dashboard/Dashboard';
 import ProblemDetail from './components/Problem/ProblemDetail';
 import AdminDashboard from './components/Admin/AdminDashboard';
+import Profile from './components/Profile/Profile';
 import AuthCallback from './components/Auth/AuthCallback';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 import './App.css';
@@ -42,6 +43,18 @@ function App() {
               <Route path="/admin" element={
                 <ProtectedRoute adminOnly>
                   <AdminDashboard />
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/profile" element={
+                <ProtectedRoute>
+                  <Profile />
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/profile/:id" element={
+                <ProtectedRoute>
+                  <Profile />
                 </ProtectedRoute>
               } />
               

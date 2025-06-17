@@ -41,6 +41,72 @@ const userSchema = new mongoose.Schema({
   lastLogin: {
     type: Date,
     default: Date.now
+  },
+  // New profile fields
+  bio: {
+    type: String,
+    maxlength: 500,
+    default: ''
+  },
+  location: {
+    type: String,
+    maxlength: 100,
+    default: ''
+  },
+  website: {
+    type: String,
+    maxlength: 200,
+    default: ''
+  },
+  github: {
+    type: String,
+    maxlength: 100,
+    default: ''
+  },
+  linkedin: {
+    type: String,
+    maxlength: 100,
+    default: ''
+  },
+  skills: [{
+    type: String,
+    trim: true
+  }],
+  preferredLanguage: {
+    type: String,
+    enum: ['python', 'cpp', 'java'],
+    default: 'python'
+  },
+  profileVisibility: {
+    type: String,
+    enum: ['public', 'private'],
+    default: 'public'
+  },
+  stats: {
+    problemsSolved: {
+      type: Number,
+      default: 0
+    },
+    totalSubmissions: {
+      type: Number,
+      default: 0
+    },
+    successfulSubmissions: {
+      type: Number,
+      default: 0
+    },
+    easyProblems: {
+      type: Number,
+      default: 0
+    },
+    mediumProblems: {
+      type: Number,
+      default: 0
+    },
+    hardProblems: {
+      type: Number,
+      default: 0
+    }
   }
 }, {
   timestamps: true
