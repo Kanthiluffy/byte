@@ -3,13 +3,13 @@ const fs = require('fs-extra');
 const path = require('path');
 const os = require('os');
 
-class CodeExecutor {
-  constructor() {
+class CodeExecutor {  constructor() {
     this.tempDir = path.join(__dirname, '../../temp');
     // Check platform and environment variables for executable handling
     this.isWindows = os.platform() === 'win32';
     // Allow override via environment variable for containerized deployments
     this.useWindowsExecutables = process.env.USE_WINDOWS_EXECUTABLES === 'true' || this.isWindows;
+    this.pythonCommand = 'python3'; // Default to python3, will be updated in checkLanguageAvailability
     this.ensureTempDir();
   }
 
@@ -42,9 +42,8 @@ class CodeExecutor {
     return commands[language] || null;
   }  getExecuteCommand(language, fileName, outputName) {
     // Create input file for cleaner input handling
-    const inputFile = `${fileName}.input`;
-    const commands = {
-      python: `python ${fileName} < ${inputFile}`,
+    const inputFile = `${fileName}.input`;    const commands = {
+      python: `${this.pythonCommand || 'python3'} ${fileName} < ${inputFile}`,
       cpp: this.useWindowsExecutables 
         ? `${outputName}.exe < ${inputFile}`  // Windows: run .exe
         : `./${outputName} < ${inputFile}`,   // Linux: run without extension, with ./
@@ -275,23 +274,33 @@ class CodeExecutor {
       console.error('Cleanup error:', error);
     }
   }
-
   async checkLanguageAvailability(language) {
     const checkCommands = {
-      python: 'python --version',
-      cpp: 'g++ --version',
-      java: 'javac -version'
+      python: ['python3 --version', 'python --version'], // Try python3 first, then python
+      cpp: ['g++ --version'],
+      java: ['javac -version']
     };
     
-    const command = checkCommands[language];
-    if (!command) return true; // Unknown language, let it proceed
+    const commands = checkCommands[language];
+    if (!commands) return true; // Unknown language, let it proceed
     
-    try {
-      await this.runCommand(command, this.tempDir, 5000);
-      return true;
-    } catch (error) {
-      return false;
+    // Try each command until one succeeds
+    for (const command of commands) {
+      try {
+        await this.runCommand(command, this.tempDir, 5000);
+        
+        // If this is python, store which command worked for execution
+        if (language === 'python') {
+          this.pythonCommand = command.includes('python3') ? 'python3' : 'python';
+        }
+        
+        return true;
+      } catch (error) {
+        // Continue to next command
+      }
     }
+    
+    return false; // None of the commands worked
   }
 }
 
