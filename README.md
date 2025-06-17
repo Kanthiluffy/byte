@@ -1,231 +1,178 @@
-# CodeJudge Platform
+# CodeJudge - Online Coding Platform
 
-A full-stack MERN application for a coding platform that allows users to solve coding problems and administrators to manage them.
+A full-stack MERN application for solving coding problems with multi-language support and real-time code execution.
 
-## 🚀 Current Status: FULLY FUNCTIONAL ✅
+## 🚀 Features
 
-- ✅ Backend API fully implemented and running
-- ✅ Frontend React app with modern UI completed
-- ✅ Database seeded with 10 test problems
-- ✅ Authentication system (Email/Password + Google OAuth)
-- ✅ Monaco Editor integration for code editing
-- ✅ Real-time code execution with 4 languages
-- ✅ Admin dashboard with full CRUD operations
-- ✅ Toast notifications for better UX
-- ✅ Fully responsive design
-- ✅ Comprehensive testing guide included
+- **Multi-language Support**: Python, C++, Java
+- **Real-time Code Execution**: 5-second timeout with proper error handling
+- **User Authentication**: JWT + Google OAuth
+- **Role-based Access**: Admin dashboard for problem management
+- **Modern UI**: React with Vite, responsive design
+- **Online Judge**: Automated test case validation
 
-## 🧪 Quick Test
+## 🛠️ Tech Stack
 
-**Login Credentials:**
-- **Admin**: admin@codejudge.com / admin123
-- **User**: user@codejudge.com / user123
+**Frontend:**
+- React 18 with Vite
+- React Router for navigation
+- Monaco Editor for code editing
+- Axios for API calls
 
-**Test URLs:**
-- Frontend: http://localhost:5173
-- Backend: http://localhost:5000
+**Backend:**
+- Node.js with Express.js
+- MongoDB with Mongoose
+- JWT for authentication
+- Passport.js for Google OAuth
+- Docker deployment ready
 
-## Features
-
-### User Features
-- 🔐 **User Authentication**: Email/password + Google OAuth with JWT
-- 📝 **Problem Solving**: Browse and solve coding problems with Monaco Editor
-- 💻 **Multi-language Support**: JavaScript, Python, C++, Java with syntax highlighting
-- ⚡ **Real-time Execution**: Instant feedback with 5-second timeout and secure sandboxing
-- 📊 **Test Case Validation**: Comprehensive testing with detailed results display
-- 🏆 **Difficulty Levels**: Easy, Medium, Hard problems with color-coded badges
-- 🔔 **Toast Notifications**: Real-time feedback for all user actions
-
-### Admin Features
-- 🛠️ **Problem Management**: Full CRUD operations for coding problems
-- 📈 **Dashboard Analytics**: Platform statistics and submission monitoring
-- 👥 **User Management**: Monitor user activity and submissions
-- 🔍 **Submission Monitoring**: Track all code submissions with detailed results
-- 🎯 **Test Case Management**: Create and manage problem test cases
-
-## Tech Stack
-
-### Frontend
-- **React 19** with Vite for fast development
-- **React Router v7** for client-side routing
-- **Monaco Editor** for professional code editing
-- **React Hot Toast** for notifications
-- **Axios** for API communication
-- **Modern CSS3** with responsive design
-
-### Backend
-- **Node.js** with Express.js framework
-- **MongoDB** with Mongoose ODM
-- **JWT** for stateless authentication
-- **Passport.js** for Google OAuth integration
-- **bcryptjs** for secure password hashing
-- **Child Process** for secure code execution
-- **CORS** for cross-origin resource sharing
-
-### Security & Performance
-- **Input Sanitization** to prevent XSS attacks
-- **SQL Injection Protection** with Mongoose
-- **Secure Code Execution** with timeouts and sandboxing
-- **JWT Token Validation** for protected routes
-- **Environment Variables** for sensitive configuration
-
-## Project Structure
+## 🏗️ Project Structure
 
 ```
-├── backend/
+byte/
+├── frontend/          # React application
 │   ├── src/
-│   │   ├── controllers/      # Business logic
-│   │   ├── middleware/       # Auth & validation
-│   │   ├── models/          # Database schemas
-│   │   ├── routes/          # API endpoints
-│   │   └── services/        # Code execution service
-│   ├── temp/
-│   └── server.js
-├── frontend/
+│   ├── public/
+│   └── package.json
+├── backend/           # Express API server
 │   ├── src/
-│   │   ├── components/
-│   │   ├── context/
-│   │   ├── services/
-│   │   └── assets/
-│   └── public/
-└── .github/
-    └── copilot-instructions.md
+│   │   ├── controllers/
+│   │   ├── models/
+│   │   ├── routes/
+│   │   └── services/
+│   ├── Dockerfile
+│   └── package.json
+└── render.yaml       # Deployment configuration
 ```
 
-## Installation & Setup
+## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js (v14 or higher)
-- MongoDB (local or Atlas)
+- Node.js 18+
+- MongoDB Atlas account
 - Git
 
 ### Backend Setup
-
-1. Navigate to the backend directory:
 ```bash
 cd backend
-```
-
-2. Install dependencies:
-```bash
 npm install
-```
-
-3. Create environment file:
-```bash
 cp .env.example .env
-```
-
-4. Update the `.env` file with your configuration:
-```env
-NODE_ENV=development
-PORT=5000
-MONGODB_URI=your_mongodb_connection_string
-JWT_SECRET=your_jwt_secret
-GOOGLE_CLIENT_ID=your_google_client_id
-GOOGLE_CLIENT_SECRET=your_google_client_secret
-FRONTEND_URL=http://localhost:5173
-```
-
-5. Start the development server:
-```bash
+# Configure your environment variables
 npm run dev
 ```
 
 ### Frontend Setup
-
-1. Navigate to the frontend directory:
 ```bash
 cd frontend
-```
-
-2. Install dependencies:
-```bash
 npm install
-```
-
-3. Create environment file:
-```bash
 cp .env.example .env
-```
-
-4. Update the `.env` file:
-```env
-VITE_API_URL=http://localhost:5000
-VITE_GOOGLE_CLIENT_ID=your_google_client_id
-```
-
-5. Start the development server:
-```bash
+# Configure your environment variables
 npm run dev
 ```
 
-## Usage
+### Environment Variables
 
-### For Users
-1. **Register/Login**: Create an account or sign in with Google
-2. **Browse Problems**: View problems by difficulty level
-3. **Solve Problems**: Write code in your preferred language
-4. **Submit & Test**: Get instant feedback on your solution
+**Backend (.env):**
+```
+NODE_ENV=development
+PORT=5000
+MONGODB_URI=your_mongodb_connection_string
+JWT_SECRET=your_jwt_secret
+FRONTEND_URL=http://localhost:5173
+GOOGLE_CLIENT_ID=your_google_client_id (optional)
+GOOGLE_CLIENT_SECRET=your_google_client_secret (optional)
+```
 
-### For Admins
-1. **Access Admin Panel**: Available for users with admin role
-2. **Create Problems**: Add new coding challenges
-3. **Monitor Platform**: View statistics and user activity
-4. **Manage Content**: Edit or deactivate problems
+**Frontend (.env):**
+```
+VITE_API_BASE_URL=http://localhost:5000/api
+VITE_GOOGLE_CLIENT_ID=your_google_client_id (optional)
+```
 
-## API Endpoints
+## 📝 Seeding Data
 
-### Authentication
-- `POST /api/auth/register` - User registration
-- `POST /api/auth/login` - User login
-- `GET /api/auth/google` - Google OAuth
-- `GET /api/auth/me` - Get current user
+Run the seed script to add initial problems and admin user:
 
-### Problems
-- `GET /api/problems` - Get all problems
-- `GET /api/problems/:id` - Get problem by ID
-- `POST /api/admin/problems` - Create problem (admin)
-- `PUT /api/admin/problems/:id` - Update problem (admin)
+```bash
+cd backend
+node seed.js
+```
 
-### Submissions
-- `POST /api/submissions` - Submit code
-- `GET /api/submissions/:id` - Get submission result
-- `GET /api/submissions/user/:userId` - Get user submissions
+**Default Admin User:**
+- Email: admin@codejudge.com
+- Password: admin123
 
-## Code Execution
+**Default Test User:**
+- Email: user@codejudge.com
+- Password: user123
 
-The platform supports secure code execution for:
-- **JavaScript**: Node.js runtime
-- **Python**: Python 3 interpreter
-- **C++**: GCC compiler
-- **Java**: OpenJDK compiler and runtime
+## 🐳 Deployment
 
-### Security Features
-- 5-second execution timeout
-- Input sanitization
-- Process isolation
-- Resource usage monitoring
+### Render.com (Recommended)
 
-## Contributing
+1. **Connect your GitHub repository to Render**
+2. **Create a new Web Service**
+3. **Configure deployment:**
+   - Environment: Docker
+   - Dockerfile path: `./backend/Dockerfile`
+   - Port: 5000
+4. **Set environment variables in Render dashboard**
+5. **Deploy**
+
+### Manual Docker Build
+
+```bash
+cd backend
+docker build -t codejudge .
+docker run -p 5000:5000 --env-file .env codejudge
+```
+
+## 🧪 Testing
+
+The platform includes comprehensive testing for:
+- Code execution in all supported languages
+- Authentication flows
+- Problem management
+- Submission validation
+
+See `TESTING_GUIDE.md` for detailed testing instructions.
+
+## 📋 Supported Languages
+
+| Language | Compiler/Interpreter | Version |
+|----------|---------------------|---------|
+| Python   | python3             | 3.9+    |
+| C++      | g++                 | 10.2+   |
+| Java     | OpenJDK             | 17+     |
+
+## 🔒 Security Features
+
+- Input sanitization and validation
+- Secure code execution in isolated processes
+- Process timeout protection
+- CORS configuration
+- Environment variable protection
+
+## 🤝 Contributing
 
 1. Fork the repository
-2. Create a feature branch: `git checkout -b feature-name`
-3. Commit changes: `git commit -am 'Add feature'`
-4. Push to branch: `git push origin feature-name`
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
 5. Submit a pull request
 
-## License
+## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License.
 
-## Support
+## 🆘 Support
 
-For support, email support@codejudge.com or create an issue in the GitHub repository.
+For issues and questions:
+1. Check the `TESTING_GUIDE.md`
+2. Review environment variable configuration
+3. Ensure all dependencies are installed
+4. Check deployment logs for specific errors
 
-## Acknowledgments
+---
 
-- React and Node.js communities
-- MongoDB for database solutions
-- Google OAuth for authentication
-- All contributors and testers
+
