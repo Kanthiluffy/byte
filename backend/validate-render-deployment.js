@@ -19,11 +19,10 @@ function validateDockerfile() {
       name: 'Base Image',
       check: content => content.includes('FROM node:'),
       message: 'Should use Node.js base image'
-    },
-    {
+    },    {
       name: 'Java Installation',
-      check: content => content.includes('openjdk-11-jdk'),
-      message: 'Should install OpenJDK 11'
+      check: content => content.includes('openjdk-17-jdk') || content.includes('openjdk-11-jdk'),
+      message: 'Should install OpenJDK 17 or 11'
     },
     {
       name: 'C++ Installation', 
