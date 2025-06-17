@@ -589,4 +589,440 @@ The platform now features a modern, professional design that enhances user exper
 
 ---
 
-Happy testing! 🧪✨
+## 🔧 Platform-Specific Notes
+
+#### C++ Cross-Platform Compatibility
+The CodeJudge platform now automatically handles C++ compilation and execution across different platforms:
+
+- **Windows Development**: Generates and executes `.exe` files
+- **Linux Production**: Generates and executes files without extensions using `./` prefix
+- **Auto-Detection**: Platform automatically detected via `os.platform()`
+- **Environment Override**: Set `USE_WINDOWS_EXECUTABLES=true` to force Windows behavior
+
+Your C++ solutions will work correctly in both development and production environments without any code changes!
+
+**Example**: The Two Sum solution provided above works seamlessly on both Windows and Linux.
+
+---
+
+## 🚨 Production Deployment Issues
+
+#### Java Installation Error
+If you encounter this error in production:
+```
+/bin/sh: 1: javac: not found
+```
+
+**Cause**: Java Development Kit (JDK) is not installed on the production server.
+
+**Solutions**:
+
+1. **Ubuntu/Debian Production Servers**:
+```bash
+sudo apt update
+sudo apt install openjdk-11-jdk
+javac -version  # Verify installation
+```
+
+2. **Docker Deployment**:
+```dockerfile
+FROM node:18-alpine
+RUN apk add --no-cache openjdk11-jdk g++ python3
+ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk
+COPY . .
+RUN npm install
+EXPOSE 5000
+CMD ["npm", "start"]
+```
+
+3. **Render.com Deployment**:
+Add to build command:
+```bash
+apt-get update && apt-get install -y openjdk-11-jdk && npm install
+```
+
+4. **Heroku Deployment**:
+```bash
+heroku buildpacks:add heroku/java
+heroku buildpacks:add heroku/nodejs
+```
+
+#### Enhanced Error Handling
+The platform now automatically detects missing language tools and provides helpful error messages:
+
+- **Before**: Cryptic `/bin/sh: 1: javac: not found`
+- **After**: `"Java (JDK) is not installed on this server. Please contact the administrator."`
+
+#### Testing Language Availability
+Use this script to test all language support:
+```bash
+node test-java-availability.js
+```
+
+Expected output:
+```
+✅ Java availability: Available
+✅ Python availability: Available  
+✅ C++ availability: Available
+```
+
+---
+
+## 🚀 Production Deployment Checklist
+
+### Pre-Deployment Requirements
+
+#### Language Tools Installation
+- [ ] **Python**: `python --version` works
+- [ ] **C++ Compiler**: `g++ --version` works  
+- [ ] **Java JDK**: `javac -version` works
+- [ ] **Java JRE**: `java -version` works
+
+#### Server Configuration
+- [ ] MongoDB Atlas connection string configured
+- [ ] Environment variables set correctly
+- [ ] CORS configuration matches frontend URL
+- [ ] File permissions for temp directory
+- [ ] SSL certificates (if using HTTPS)
+
+#### Testing Scripts Available
+- [ ] `test-java-availability.js` - Java installation verification
+- [ ] `test-cpp-platform.js` - C++ cross-platform testing
+- [ ] `node test-execution.js` - General code execution testing
+
+### Deployment Steps
+
+#### 1. Install Language Dependencies
+
+**Ubuntu/Debian**:
+```bash
+sudo apt update
+sudo apt install -y openjdk-11-jdk g++ python3 python3-pip
+```
+
+**CentOS/RHEL**:
+```bash
+sudo yum install -y java-11-openjdk-devel gcc-c++ python3 python3-pip
+```
+
+**Alpine Linux (Docker)**:
+```bash
+apk add --no-cache openjdk11-jdk g++ python3 py3-pip
+```
+
+#### 2. Verify Installations
+```bash
+python3 --version   # Should show Python 3.x
+g++ --version       # Should show GCC version
+javac -version      # Should show javac version
+java -version       # Should show Java runtime version
+```
+
+#### 3. Set Environment Variables
+```bash
+export MONGODB_URI="your-mongodb-atlas-connection-string"
+export FRONTEND_URL="https://your-frontend-domain.com"
+export NODE_ENV="production"
+export PORT="5000"
+```
+
+#### 4. Test Language Support
+```bash
+cd backend
+node test-java-availability.js
+node test-cpp-platform.js
+```
+
+#### 5. Start Application
+```bash
+npm start
+# OR
+pm2 start server.js --name codejudge-backend
+```
+
+### Common Deployment Platforms
+
+#### Render.com
+```yaml
+# render.yaml
+services:
+  - type: web
+    name: codejudge-backend
+    env: node
+    buildCommand: |
+      apt-get update && 
+      apt-get install -y openjdk-11-jdk g++ python3 && 
+      npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+```
+
+#### Railway
+```dockerfile
+FROM node:18-alpine
+RUN apk add --no-cache openjdk11-jdk g++ python3
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+EXPOSE 5000
+CMD ["npm", "start"]
+```
+
+#### DigitalOcean App Platform
+```yaml
+# .do/app.yaml
+name: codejudge-backend
+services:
+- name: api
+  source_dir: backend
+  github:
+    repo: your-username/your-repo
+    branch: main
+  run_command: npm start
+  environment_slug: node-js
+  instance_count: 1
+  instance_size_slug: basic-xxs
+  envs:
+  - key: NODE_ENV
+    value: production
+```
+
+### Troubleshooting Guide
+
+#### Issue: `javac: not found`
+**Solution**: Install JDK as shown above
+
+#### Issue: `g++: not found` 
+**Solution**: Install C++ compiler
+```bash
+# Ubuntu/Debian
+sudo apt install g++
+# CentOS/RHEL  
+sudo yum install gcc-c++
+```
+
+#### Issue: `python: not found`
+**Solution**: Install Python or create symlink
+```bash
+# Install Python
+sudo apt install python3
+# Create symlink (if needed)
+sudo ln -s /usr/bin/python3 /usr/bin/python
+```
+
+#### Issue: MongoDB connection fails
+**Solution**: Check connection string and network access
+```bash
+# Test MongoDB connection
+node -e "
+const mongoose = require('mongoose');
+mongoose.connect('your-connection-string')
+  .then(() => console.log('✅ MongoDB connected'))
+  .catch(err => console.error('❌ MongoDB failed:', err.message));
+"
+```
+
+#### Issue: CORS errors
+**Solution**: Ensure FRONTEND_URL is set correctly
+```javascript
+// Check current CORS configuration
+console.log('CORS Origin:', process.env.FRONTEND_URL);
+```
+
+#### Issue: File permissions
+**Solution**: Ensure temp directory is writable
+```bash
+chmod 755 backend/temp
+# OR create if doesn't exist
+mkdir -p backend/temp && chmod 755 backend/temp
+```
+
+### Performance Optimization
+
+#### 1. Process Management
+```bash
+# Install PM2 for production
+npm install -g pm2
+
+# Start with PM2
+pm2 start server.js --name codejudge-backend
+
+# Enable auto-restart
+pm2 startup
+pm2 save
+```
+
+#### 2. Environment Tuning
+```bash
+# Set NODE_ENV for performance
+export NODE_ENV=production
+
+# Increase file limits (if needed)
+ulimit -n 65536
+```
+
+#### 3. Monitoring Setup
+```bash
+# PM2 monitoring
+pm2 monit
+
+# Log management
+pm2 logs codejudge-backend
+```
+
+### Security Considerations
+
+- [ ] Environment variables secured (no sensitive data in code)
+- [ ] CORS properly configured
+- [ ] Input validation enabled
+- [ ] File upload restrictions in place
+- [ ] Rate limiting configured (if needed)
+- [ ] HTTPS enforced in production
+
+### Post-Deployment Verification
+
+1. **Health Check**: `GET /api/health` returns 200
+2. **Language Testing**: All test scripts pass
+3. **Problem Submission**: Submit test solutions in all languages
+4. **Admin Functions**: Create/edit problems works
+5. **User Registration**: Sign up and login works
+6. **Code Execution**: Test with provided solutions
+
+The deployment is complete when all languages work correctly and the platform handles submissions without errors! 🎯
+
+---
+
+## 🎯 Deployment Verification Script
+
+Use the comprehensive deployment checker to verify all systems:
+
+```bash
+node deployment-check.js
+```
+
+This script automatically checks:
+- ✅ **Language Tools**: Python, C++, Java availability
+- ✅ **Environment Variables**: MongoDB URI, Frontend URL configuration  
+- ✅ **Directory Structure**: Temp directory permissions
+- ✅ **MongoDB Connection**: Atlas connectivity test
+- ✅ **Code Execution**: All languages working correctly
+
+**Expected Result**: `🎉 Deployment Ready! All systems operational.`
+
+If any checks fail, the script provides specific fix commands and guidance.
+
+### 📋 Quick Reference Commands
+
+**Local Development**:
+```bash
+# Install dependencies
+npm install
+
+# Run deployment check
+node deployment-check.js
+
+# Test specific languages
+node test-java-availability.js
+node test-cpp-platform.js
+
+# Start development server
+npm run dev
+```
+
+**Production Deployment**:
+```bash
+# Install language tools (Ubuntu/Debian)
+sudo apt update && sudo apt install -y openjdk-11-jdk g++ python3
+
+# Verify installation
+javac -version && g++ --version && python3 --version
+
+# Set environment variables
+export MONGODB_URI="your-connection-string"
+export FRONTEND_URL="https://your-frontend-domain.com"
+export NODE_ENV="production"
+
+# Run verification
+node deployment-check.js
+
+# Start production server
+npm start
+```
+
+The CodeJudge platform is now production-ready with comprehensive error handling, cross-platform compatibility, and deployment verification! 🚀
+
+---
+
+## 🐳 Render.com Deployment Solution
+
+**Problem**: Render's read-only file system prevents `apt-get` commands during build.
+
+**Solution**: Use Docker deployment with pre-installed language tools.
+
+#### Step 1: Use the Provided Dockerfile
+
+A `Dockerfile` has been created in the backend directory with all required language tools:
+
+```dockerfile
+FROM node:18
+RUN apt-get update && apt-get install -y openjdk-11-jdk g++ python3
+ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+COPY . .
+RUN mkdir -p temp && chmod 755 temp
+EXPOSE 5000
+CMD ["node", "server.js"]
+```
+
+#### Step 2: Configure Render Service
+
+1. **Service Type**: Web Service
+2. **Environment**: Docker  
+3. **Root Directory**: `backend` (if applicable)
+4. **Build Command**: Leave empty (Docker handles this)
+5. **Start Command**: Leave empty (Docker handles this)
+
+#### Step 3: Set Environment Variables
+
+```
+NODE_ENV=production
+MONGODB_URI=your-mongodb-atlas-connection-string
+FRONTEND_URL=https://your-frontend-app.onrender.com
+```
+
+#### Step 4: Deploy and Test
+
+After deployment, verify with:
+```bash
+curl https://your-backend-app.onrender.com/api/health
+```
+
+**Expected Response**:
+```json
+{
+  "status": "OK",
+  "message": "CodeJudge Backend Server is running",
+  "timestamp": "2025-06-17T..."
+}
+```
+
+#### Alternative: Disable Java Temporarily
+
+If you need to deploy immediately without Java support:
+
+1. **Frontend**: Remove 'java' from supported languages
+2. **Backend**: Add Java validation check:
+```javascript
+if (language === 'java') {
+  return res.status(400).json({
+    message: 'Java submissions temporarily unavailable'
+  });
+}
+```
+
+For complete Render deployment troubleshooting, see `RENDER_DEPLOYMENT_FIX.md`.

@@ -1,0 +1,47 @@
+# Render Service Configuration
+services:
+  # Backend API Service
+  - type: web
+    name: codejudge-backend
+    env: docker
+    dockerfilePath: ./backend/Dockerfile
+    
+    # Environment variables
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: MONGODB_URI
+        sync: false  # Set this manually in Render dashboard
+      - key: FRONTEND_URL
+        sync: false  # Set this manually in Render dashboard
+    
+    # Health check configuration
+    healthCheckPath: /api/health
+    
+    # Auto-deploy settings
+    autoDeploy: true
+    
+    # Resource configuration
+    plan: starter  # or free, if available
+    
+    # Build configuration
+    buildFilter:
+      paths:
+        - backend/**
+      ignoredPaths:
+        - frontend/**
+        - README.md
+        - "*.md"
+
+# Optional: If you want to deploy frontend separately
+  # - type: web
+  #   name: codejudge-frontend
+  #   env: static
+  #   buildCommand: npm run build
+  #   staticPublishPath: ./dist
+  #   pullRequestPreviewsEnabled: true
+  #   buildFilter:
+  #     paths:
+  #       - frontend/**

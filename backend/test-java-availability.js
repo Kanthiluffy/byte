@@ -48,7 +48,7 @@ async function testJavaAvailability() {
     
     if (result1.status === 'Accepted') {
       console.log('✅ Java simple addition: PASSED\n');
-    } else if (result1.status === 'System Error') {
+    } else if (result1.status === 'Internal Error') {
       console.log('❌ Java is not installed:', result1.error);
       console.log('\n=== Installation Required ===');
       console.log('Please install Java JDK:');

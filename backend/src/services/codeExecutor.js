@@ -69,9 +69,8 @@ class CodeExecutor {
           cpp: 'C++ (g++)',
           java: 'Java (JDK)'
         };
-        
-        return {
-          status: 'System Error',
+          return {
+          status: 'Internal Error',
           error: `${languageNames[language] || language} is not installed on this server. Please contact the administrator.`,
           testCaseResults: []
         };
@@ -124,11 +123,10 @@ class CodeExecutor {
           const expectedOutput = testCase.expectedOutput.trim();
           const passed = actualOutput === expectedOutput;
 
-          if (passed) passedCount++;
-
-          testCaseResults.push({
+          if (passed) passedCount++;          testCaseResults.push({
             testCaseId: testCase._id,
             passed,
+            status: passed ? 'Accepted' : 'Wrong Answer',
             input: testCase.input,
             expectedOutput: testCase.expectedOutput,
             actualOutput,
@@ -150,11 +148,10 @@ class CodeExecutor {
           let status = 'Runtime Error';
           if (error.code === 'TIMEOUT') {
             status = 'Time Limit Exceeded';
-          }
-
-          testCaseResults.push({
+          }          testCaseResults.push({
             testCaseId: testCase._id,
             passed: false,
+            status: status,
             input: testCase.input,
             expectedOutput: testCase.expectedOutput,
             actualOutput: '',

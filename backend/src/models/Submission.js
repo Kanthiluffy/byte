@@ -9,6 +9,17 @@ const testCaseResultSchema = new mongoose.Schema({
     type: Boolean,
     required: true
   },
+  status: {
+    type: String,
+    enum: [
+      'Accepted',
+      'Wrong Answer',
+      'Time Limit Exceeded',
+      'Memory Limit Exceeded',
+      'Runtime Error'
+    ],
+    default: 'Wrong Answer'
+  },
   input: {
     type: String,
     required: true
