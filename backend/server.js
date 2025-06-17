@@ -48,6 +48,70 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Language availability test endpoint
+app.get('/api/test/languages', async (req, res) => {
+  const { exec } = require('child_process');
+  const { promisify } = require('util');
+  const execAsync = promisify(exec);
+  
+  const languages = {
+    node: 'node --version',
+    python: 'python3 --version', 
+    cpp: 'g++ --version',
+    java: 'java -version'
+  };
+  
+  const results = {};
+  
+  for (const [lang, command] of Object.entries(languages)) {
+    try {
+      const { stdout, stderr } = await execAsync(command);
+      results[lang] = {
+        available: true,
+        version: (stdout || stderr).split('\n')[0].trim(),
+        command: command
+      };
+    } catch (error) {
+      results[lang] = {
+        available: false,
+        error: error.message,
+        command: command
+      };
+    }
+  }
+  
+  res.json({
+    server: 'Render.com',
+    timestamp: new Date().toISOString(),
+    languages: results
+  });
+});
+
+// Test Python execution specifically
+app.post('/api/test/python', async (req, res) => {
+  try {
+    const codeExecutor = require('./src/services/codeExecutor');
+    
+    const testCode = `print("Python execution test successful!")`;
+    const testCases = [{ input: '', expectedOutput: 'Python execution test successful!' }];
+    
+    const result = await codeExecutor.executeCode(testCode, 'python', testCases, 5000);
+    
+    res.json({
+      pythonTest: 'executed',
+      result: result,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    res.json({
+      pythonTest: 'failed',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);

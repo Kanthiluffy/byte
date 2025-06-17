@@ -1,10 +1,9 @@
 # Render Service Configuration
 services:
-  # Backend API Service
-  - type: web
+  # Backend API Service  - type: web
     name: codejudge-backend
     env: docker
-    dockerfilePath: ./backend/Dockerfile
+    dockerfilePath: ./backend/Dockerfile.ubuntu
     
     # Environment variables
     envVars:
