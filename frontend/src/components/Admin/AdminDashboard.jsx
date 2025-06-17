@@ -6,9 +6,9 @@ import './AdminDashboard.css';
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('overview');
-  const [dashboardData, setDashboardData] = useState(null);
-  const [problems, setProblems] = useState([]);
+  const [dashboardData, setDashboardData] = useState(null);  const [problems, setProblems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false); // Add state to track creation
   const [error, setError] = useState('');
   const [showProblemForm, setShowProblemForm] = useState(false);
   const [editingProblem, setEditingProblem] = useState(null);
@@ -75,21 +75,39 @@ const AdminDashboard = () => {
         toast.error(errorMessage);
       }
     }
-  };
-  const handleProblemSubmit = async (problemData) => {
+  };  const handleProblemSubmit = async (problemData) => {
+    // Prevent multiple simultaneous creations
+    if (creating && !editingProblem) return;
+    
     try {
       if (editingProblem) {
         const response = await adminAPI.updateProblem(editingProblem._id, problemData);
-        setProblems(problems.map(p => p._id === editingProblem._id ? response.data : p));
+        console.log('Update response:', response.data);
+        
+        const updatedProblem = response.data.problem || response.data;
+        setProblems(problems.map(p => p._id === editingProblem._id ? updatedProblem : p));
         toast.success('Problem updated successfully!');
       } else {
+        setCreating(true);
         const response = await adminAPI.createProblem(problemData);
-        setProblems([...problems, response.data]);
+        console.log('Create response:', response.data);
+        
+        const newProblem = response.data.problem || response.data;
+        const safeNewProblem = {
+          ...newProblem,
+          difficulty: newProblem.difficulty || 'Easy',
+          tags: newProblem.tags || [],
+          testCases: newProblem.testCases || [],
+          createdAt: newProblem.createdAt || new Date().toISOString()
+        };
+        
+        setProblems(prevProblems => [...prevProblems, safeNewProblem]);
         toast.success('Problem created successfully!');
       }
+      
       setShowProblemForm(false);
       setEditingProblem(null);
-      setError(''); // Clear any previous errors
+      setError('');
       
       // Refresh dashboard stats if we're on overview tab
       if (activeTab === 'overview') {
@@ -97,8 +115,14 @@ const AdminDashboard = () => {
       }
     } catch (error) {
       console.error('Error saving problem:', error);
-      toast.error(editingProblem ? 'Failed to update problem' : 'Failed to create problem');
-      throw error; // Re-throw to let ProblemForm handle the error
+      const errorMessage = error.response?.data?.message || 'Failed to save problem';
+      setError(errorMessage);
+      toast.error(errorMessage);
+      throw error;
+    } finally {
+      if (!editingProblem) {
+        setCreating(false);
+      }
     }
   };
 
@@ -142,11 +166,10 @@ const AdminDashboard = () => {
             {recentSubmissions.map((submission) => (
               <div key={submission._id} className="table-row">
                 <div>{submission.userId?.name || 'Unknown'}</div>
-                <div>{submission.problemId?.title || 'Unknown'}</div>
-                <div className={`status ${submission.status.toLowerCase().replace(/\s+/g, '-')}`}>
-                  {submission.status}
+                <div>{submission.problemId?.title || 'Unknown'}</div>                <div className={`status ${(submission.status || 'pending').toLowerCase().replace(/\s+/g, '-')}`}>
+                  {submission.status || 'Pending'}
                 </div>
-                <div>{new Date(submission.createdAt).toLocaleString()}</div>
+                <div>{submission.createdAt ? new Date(submission.createdAt).toLocaleString() : 'Unknown'}</div>
               </div>
             ))}
           </div>
@@ -162,9 +185,12 @@ const AdminDashboard = () => {
     return (
       <div className="problems-content">
         <div className="section-header">
-          <h3>Manage Problems</h3>
-          <button className="create-button" onClick={handleCreateProblem}>
-            Create New Problem
+          <h3>Manage Problems</h3>          <button 
+            className="create-button" 
+            onClick={handleCreateProblem} 
+            disabled={creating}
+          >
+            {creating ? 'Creating...' : 'Create New Problem'}
           </button>
         </div>
 
@@ -182,20 +208,18 @@ const AdminDashboard = () => {
               <div>Test Cases</div>
               <div>Created</div>
               <div>Actions</div>
-            </div>
-            {problems.map((problem) => (
+            </div>            {problems.map((problem) => (
               <div key={problem._id} className="table-row">
-                <div className="problem-title">{problem.title}</div>
-                <div className={`difficulty ${problem.difficulty.toLowerCase()}`}>
-                  {problem.difficulty}
-                </div>
-                <div className="tags-cell">
-                  {problem.tags?.map(tag => (
+                <div className="problem-title">{problem.title || 'Untitled'}</div>
+                <div className={`difficulty ${(problem.difficulty || 'easy').toLowerCase()}`}>
+                  {problem.difficulty || 'Easy'}
+                </div>                <div className="tags-cell">
+                  {(problem.tags || []).map(tag => (
                     <span key={tag} className="tag">{tag}</span>
                   ))}
                 </div>
                 <div>{problem.testCases?.length || 0}</div>
-                <div>{new Date(problem.createdAt).toLocaleDateString()}</div>
+                <div>{problem.createdAt ? new Date(problem.createdAt).toLocaleDateString() : 'Unknown'}</div>
                 <div className="actions">
                   <button 
                     className="edit-button"
@@ -260,13 +284,11 @@ const AdminDashboard = () => {
             </div>
           )}
         </div>
-      </div>
-
-      {showProblemForm && (
+      </div>      {showProblemForm && (
         <ProblemForm
           problem={editingProblem}
-          onSubmit={handleProblemSubmit}
-          onCancel={() => {
+          onSave={handleProblemSubmit}
+          onClose={() => {
             setShowProblemForm(false);
             setEditingProblem(null);
           }}

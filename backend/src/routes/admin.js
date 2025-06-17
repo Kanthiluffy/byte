@@ -24,12 +24,18 @@ router.post('/problems', async (req, res) => {
       memoryLimit,
       examples,
       testCases
-    } = req.body;
-
-    // Validation
+    } = req.body;    // Validation
     if (!title || !description || !difficulty) {
       return res.status(400).json({ 
         message: 'Title, description, and difficulty are required' 
+      });
+    }
+
+    // Check for duplicate title
+    const existingProblem = await Problem.findOne({ title: title.trim() });
+    if (existingProblem) {
+      return res.status(400).json({ 
+        message: 'A problem with this title already exists' 
       });
     }
 

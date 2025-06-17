@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { adminAPI } from '../../services/api';
 import './ProblemForm.css';
 
 const ProblemForm = ({ problem, onClose, onSave }) => {
@@ -16,7 +15,6 @@ const ProblemForm = ({ problem, onClose, onSave }) => {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
   useEffect(() => {
     if (problem) {
       setFormData({
@@ -24,7 +22,8 @@ const ProblemForm = ({ problem, onClose, onSave }) => {
         description: problem.description || '',
         difficulty: problem.difficulty || 'Easy',
         constraints: problem.constraints || '',
-        timeLimit: problem.timeLimit || 5,
+        // Convert timeLimit from milliseconds to seconds for display
+        timeLimit: problem.timeLimit ? Math.round(problem.timeLimit / 1000) : 5,
         memoryLimit: problem.memoryLimit || 128,
         examples: problem.examples?.length ? problem.examples : [{ input: '', output: '', explanation: '' }],
         testCases: problem.testCases?.length ? problem.testCases : [{ input: '', expectedOutput: '', isHidden: false }],
@@ -83,10 +82,12 @@ const ProblemForm = ({ problem, onClose, onSave }) => {
         testCases: prev.testCases.filter((_, i) => i !== index)
       }));
     }
-  };
-
-  const handleSubmit = async (e) => {
+  };  const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Prevent double submissions
+    if (loading) return;
+    
     setLoading(true);
     setError('');
 
@@ -105,6 +106,8 @@ const ProblemForm = ({ problem, onClose, onSave }) => {
       // Filter out empty examples and test cases
       const cleanedData = {
         ...formData,
+        // Convert timeLimit from seconds to milliseconds for backend
+        timeLimit: formData.timeLimit * 1000,
         examples: formData.examples.filter(ex => ex.input.trim() && ex.output.trim()),
         testCases: formData.testCases.filter(tc => tc.input.trim() && tc.expectedOutput.trim())
       };
@@ -113,14 +116,10 @@ const ProblemForm = ({ problem, onClose, onSave }) => {
         throw new Error('At least one valid test case is required');
       }
 
-      let response;
-      if (problem?._id) {
-        response = await adminAPI.updateProblem(problem._id, cleanedData);
-      } else {
-        response = await adminAPI.createProblem(cleanedData);
-      }
-
-      onSave(response.data);
+      // Pass the cleaned data to parent component for API call
+      await onSave(cleanedData);
+      
+      // Only close the form if the save was successful
       onClose();
     } catch (err) {
       setError(err.response?.data?.message || err.message);

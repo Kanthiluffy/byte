@@ -189,3 +189,38 @@ cd frontend && npm run dev
 - User: user@codejudge.com / user123
 
 The platform includes comprehensive documentation, testing guides, and is ready for production deployment! 🚀
+
+---
+
+## 🛠️ Latest Fix: AdminDashboard TypeError (December 17, 2025)
+
+**Issue**: Frontend error when clicking "Create Problem" in AdminDashboard:
+```
+Uncaught TypeError: Cannot read properties of undefined (reading 'toLowerCase')
+```
+
+**Fix**: Added comprehensive null safety checks in AdminDashboard component for:
+- Submission status values (fallback to 'pending')
+- Submission timestamps (fallback to 'Unknown')  
+- Problem tags arrays (fallback to empty array)
+
+**Status**: ✅ **RESOLVED** - AdminDashboard now handles null/undefined data gracefully
+
+### Latest Fix: Duplicate Problem Creation Prevention (December 17, 2025)
+
+**Issue**: Problems being created multiple times when clicking "Create Problem", with only one visible to users.
+
+**Root Causes**: 
+- Frontend race conditions (multiple simultaneous API calls)
+- No backend duplicate validation
+- 5 duplicate "Roman to Integer" problems found in database
+
+**Fixes Applied**:
+- ✅ Added creation state management in frontend
+- ✅ Prevent concurrent API calls with `creating` state
+- ✅ Enhanced form submission validation
+- ✅ Added backend duplicate title checking
+- ✅ Cleaned up 4 duplicate problems from database
+- ✅ Improved UI feedback during creation
+
+**Status**: ✅ **RESOLVED** - Problem creation now properly prevents duplicates with better UX
