@@ -10,6 +10,8 @@ class CodeExecutor {  constructor() {
     // Allow override via environment variable for containerized deployments
     this.useWindowsExecutables = process.env.USE_WINDOWS_EXECUTABLES === 'true' || this.isWindows;
     this.pythonCommand = 'python3'; // Default to python3, will be updated in checkLanguageAvailability
+    this.javaVersion = 11; // Default to assuming Java 11+ is available
+    this.canUseJavaDirectExecution = true; // Default to using direct execution feature
     this.ensureTempDir();
   }
 
@@ -25,30 +27,43 @@ class CodeExecutor {  constructor() {
     const timestamp = Date.now();
     const extension = extensions[language];
     
-    // For Java, use a standard class name to avoid public class issues
-    if (language === 'java') {
-      return `Solution.${extension}`;
-    }
-    
+    // Using UUID for all languages, including Java
     return `${submissionId}_${timestamp}.${extension}`;
   }  getCompileCommand(language, fileName, outputName) {
     const commands = {
       cpp: this.useWindowsExecutables 
         ? `g++ -o ${outputName}.exe ${fileName}` // Windows: generate .exe
         : `g++ -o ${outputName} ${fileName}`,    // Linux: no .exe extension
-      java: `javac ${fileName}`
     };
+    
+    // Only compile Java if we're not using direct execution (Java < 11)
+    if (language === 'java' && !this.canUseJavaDirectExecution) {
+      commands.java = `javac ${fileName}`;
+    }
     
     return commands[language] || null;
   }  getExecuteCommand(language, fileName, outputName) {
     // Create input file for cleaner input handling
-    const inputFile = `${fileName}.input`;    const commands = {
+    const inputFile = `${fileName}.input`;    
+    
+    const commands = {
       python: `${this.pythonCommand || 'python3'} ${fileName} < ${inputFile}`,
       cpp: this.useWindowsExecutables 
         ? `${outputName}.exe < ${inputFile}`  // Windows: run .exe
         : `./${outputName} < ${inputFile}`,   // Linux: run without extension, with ./
-      java: `java Solution < ${inputFile}` // Use the class name directly
     };
+    
+    // Choose Java execution method based on version
+    if (language === 'java') {
+      if (this.canUseJavaDirectExecution) {
+        // Java 11+ can directly run source files without compilation
+        commands.java = `java ${fileName} < ${inputFile}`;
+      } else {
+        // For older Java versions, run the compiled class file
+        // For this to work, the code should have a 'public class Solution'
+        commands.java = `java Solution < ${inputFile}`;
+      }
+    }
     
     return commands[language];
   }
@@ -84,7 +99,7 @@ class CodeExecutor {  constructor() {
         try {
           await this.runCommand(compileCommand, this.tempDir, 10000);
         } catch (compileError) {
-          await this.cleanup(filePath, outputPath);
+          await this.cleanup(filePath, outputPath, language);
           return {
             status: 'Compilation Error',
             error: compileError.message,
@@ -160,7 +175,7 @@ class CodeExecutor {  constructor() {
 
           // If any test case fails with TLE or RE, stop execution
           if (status === 'Time Limit Exceeded' || status === 'Runtime Error') {
-            await this.cleanup(filePath, outputPath);
+            await this.cleanup(filePath, outputPath, language);
             return {
               status,
               error: error.message,
@@ -173,7 +188,7 @@ class CodeExecutor {  constructor() {
         }
       }
 
-      await this.cleanup(filePath, outputPath);
+      await this.cleanup(filePath, outputPath, language);
 
       // Determine final status
       let status = 'Wrong Answer';
@@ -190,7 +205,7 @@ class CodeExecutor {  constructor() {
       };
 
     } catch (error) {
-      await this.cleanup(filePath, outputPath);
+      await this.cleanup(filePath, outputPath, language);
       return {
         status: 'Internal Error',
         error: error.message,
@@ -229,7 +244,7 @@ class CodeExecutor {  constructor() {
         reject({ code: 'ERROR', message: err.message });
       });
     });
-  }  async cleanup(filePath, outputPath) {
+  }  async cleanup(filePath, outputPath, language) {
     try {
       if (await fs.pathExists(filePath)) {
         await fs.remove(filePath);
@@ -249,20 +264,16 @@ class CodeExecutor {  constructor() {
         // No additional cleanup needed for Linux executables
       }
       
-      // Clean up Java class files
-      const dir = path.dirname(filePath);
-      if (path.parse(filePath).name === 'Solution') {
-        // For Java, clean up Solution.class
-        const classFile = path.join(dir, 'Solution.class');
-        if (await fs.pathExists(classFile)) {
-          await fs.remove(classFile);
-        }
-      } else {
-        // For other languages, clean up with original naming
-        const baseName = path.parse(filePath).name;
-        const classFile = path.join(dir, `${baseName.split('_')[0]}.class`);
-        if (await fs.pathExists(classFile)) {
-          await fs.remove(classFile);
+      // Clean up Java class files (for backward compatibility with older versions of Java)
+      if (language === 'java' && !this.canUseJavaDirectExecution) {
+        const dir = path.dirname(filePath);
+        // Look for any class files that might have been generated
+        const filesInDir = await fs.readdir(dir);
+        const classFiles = filesInDir.filter(file => file.endsWith('.class'));
+        
+        // Remove all class files
+        for (const classFile of classFiles) {
+          await fs.remove(path.join(dir, classFile));
         }
       }
       // Clean up input files
@@ -278,7 +289,7 @@ class CodeExecutor {  constructor() {
     const checkCommands = {
       python: ['python3 --version', 'python --version'], // Try python3 first, then python
       cpp: ['g++ --version'],
-      java: ['javac -version']
+      java: ['java -version'] // Using java instead of javac to check availability
     };
     
     const commands = checkCommands[language];
@@ -287,11 +298,28 @@ class CodeExecutor {  constructor() {
     // Try each command until one succeeds
     for (const command of commands) {
       try {
-        await this.runCommand(command, this.tempDir, 5000);
+        const result = await this.runCommand(command, this.tempDir, 5000);
         
         // If this is python, store which command worked for execution
         if (language === 'python') {
           this.pythonCommand = command.includes('python3') ? 'python3' : 'python';
+        }
+        
+        // Check Java version to determine if we can use direct execution
+        if (language === 'java') {
+          const versionOutput = result.stderr || result.stdout; // Java version is often in stderr
+          const versionMatch = versionOutput.match(/version "(\d+)/i);
+          
+          if (versionMatch && versionMatch[1]) {
+            const javaVersion = parseInt(versionMatch[1]);
+            this.javaVersion = javaVersion;
+            this.canUseJavaDirectExecution = javaVersion >= 11;
+            console.log(`Detected Java version: ${javaVersion}, direct execution: ${this.canUseJavaDirectExecution}`);
+          } else {
+            // Default to using direct execution if we can't parse the version
+            this.canUseJavaDirectExecution = true;
+            console.log('Could not determine Java version, assuming Java 11+');
+          }
         }
         
         return true;
