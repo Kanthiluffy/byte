@@ -9,6 +9,7 @@ const problemRoutes = require('./src/routes/problems');
 const submissionRoutes = require('./src/routes/submissions');
 const adminRoutes = require('./src/routes/admin');
 const profileRoutes = require('./src/routes/profile');
+const aiRoutes = require('./src/routes/ai');
 
 const app = express();
 
@@ -38,6 +39,7 @@ app.use('/api/problems', problemRoutes);
 app.use('/api/submissions', submissionRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/profile', profileRoutes);
+app.use('/api/ai', aiRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
