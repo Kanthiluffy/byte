@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Editor } from '@monaco-editor/react';
 import toast from 'react-hot-toast';
-import { problemsAPI, submissionsAPI } from '../../services/api';
+import { problemsAPI, submissionsAPI, aiAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 
 const ProblemDetail = () => {
@@ -16,9 +16,17 @@ const ProblemDetail = () => {
   const [submitting, setSubmitting] = useState(false);
   const [submissionResult, setSubmissionResult] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [aiAvailable, setAiAvailable] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [codeReview, setCodeReview] = useState(null);
+  const [hint, setHint] = useState(null);
+  const [showAiPanel, setShowAiPanel] = useState(false);
+  
   useEffect(() => {
     fetchProblem();
+    checkAiAvailability();
   }, [id]);
+  
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyPress = (e) => {
@@ -86,7 +94,9 @@ function solution() {
     
     setLanguage(lang);
     setCode(templates[lang] || templates.python);
-  };  const handleSubmit = async () => {
+  };
+  
+  const handleSubmit = async () => {
     if (!code.trim()) {
       toast.error('Please write some code before submitting');
       return;
@@ -123,6 +133,75 @@ function solution() {
       toast.error('Failed to submit solution');
       console.error(err);
       setSubmitting(false);
+    }
+  };
+  
+  const checkAiAvailability = async () => {
+    try {
+      const response = await aiAPI.getStatus();
+      setAiAvailable(response.data.available);
+    } catch (error) {
+      console.error('Failed to check AI availability:', error);
+      setAiAvailable(false);
+    }
+  };
+
+  const handleGetCodeReview = async () => {
+    if (!code.trim()) {
+      toast.error('Please write some code before requesting a review');
+      return;
+    }
+
+    try {
+      setAiLoading(true);
+      const response = await aiAPI.getCodeReview({
+        code,
+        language
+      });
+      
+      if (response.data.success) {
+        setCodeReview(response.data.review);
+        setHint(null);
+        setShowAiPanel(true);
+        toast.success('AI code review generated!');
+      } else {
+        toast.error(response.data.message || 'Failed to generate code review');
+      }
+    } catch (error) {
+      console.error('Code review error:', error);
+      toast.error('Failed to generate code review');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleGetHint = async () => {
+    if (!code.trim()) {
+      toast.error('Please write some code before requesting a hint');
+      return;
+    }
+
+    try {
+      setAiLoading(true);
+      const response = await aiAPI.getHint({
+        problemId: id,
+        code,
+        language
+      });
+      
+      if (response.data.success) {
+        setHint(response.data.hint);
+        setCodeReview(null);
+        setShowAiPanel(true);
+        toast.success('AI hint generated!');
+      } else {
+        toast.error(response.data.message || 'Failed to generate hint');
+      }
+    } catch (error) {
+      console.error('Hint error:', error);
+      toast.error('Failed to generate hint');
+    } finally {
+      setAiLoading(false);
     }
   };
 
@@ -212,6 +291,7 @@ function solution() {
       </div>
     );
   };
+  
   const renderConstraints = () => {
     // Fix: constraints is a string in the backend, not an array
     if (!problem?.constraints || typeof problem.constraints !== 'string' || problem.constraints.trim().length === 0) {
@@ -227,53 +307,50 @@ function solution() {
     if (constraintsList.length === 0) return null;
 
     return (
-      <div className="space-y-3">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Constraints</h3>
-        {constraintsList.length === 1 ? (
-          // If it's just one constraint, display as paragraph
-          <p className="text-sm text-gray-600 dark:text-gray-400">{constraintsList[0]}</p>
-        ) : (
-          // If multiple constraints, display as list
-          <ul className="list-disc list-inside space-y-1 text-sm text-gray-600 dark:text-gray-400">
-            {constraintsList.map((constraint, index) => (
-              <li key={index}>{constraint}</li>
-            ))}
-          </ul>
-        )}
+      <div className="mt-6">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Constraints</h3>
+        <ul className="list-disc pl-5 space-y-1 text-gray-600 dark:text-gray-400">
+          {constraintsList.map((constraint, index) => (
+            <li key={index}>{constraint}</li>
+          ))}
+        </ul>
       </div>
     );
   };
+
   const renderSubmissionResult = () => {
     if (!submissionResult) return null;
-
+    
     const statusColors = {
-      ACCEPTED: 'text-green-600 bg-green-50 border-green-200',
-      WRONG_ANSWER: 'text-red-600 bg-red-50 border-red-200',
-      TIME_LIMIT_EXCEEDED: 'text-yellow-600 bg-yellow-50 border-yellow-200',
-      RUNTIME_ERROR: 'text-red-600 bg-red-50 border-red-200',
-      COMPILATION_ERROR: 'text-orange-600 bg-orange-50 border-orange-200',
-      RUNNING: 'text-blue-600 bg-blue-50 border-blue-200',
-      PENDING: 'text-gray-600 bg-gray-50 border-gray-200'
+      'ACCEPTED': 'bg-green-100 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-200',
+      'WRONG_ANSWER': 'bg-red-100 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200',
+      'RUNTIME_ERROR': 'bg-red-100 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200',
+      'COMPILATION_ERROR': 'bg-red-100 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200',
+      'TIME_LIMIT_EXCEEDED': 'bg-orange-100 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800 text-orange-800 dark:text-orange-200',
+      'RUNNING': 'bg-blue-100 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200',
     };
-
+    
+    const statusColor = statusColors[submissionResult.status] || 'bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-200';
+    
     return (
-      <div className="mt-6 p-4 border-l-4 border-blue-500 bg-blue-50 dark:bg-blue-900/20">
-        <div className="flex items-center justify-between mb-3">
-          <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Submission Result</h4>
-          <div className="flex items-center space-x-2">
-            {submissionResult.status === 'RUNNING' && (
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-            )}
-            <span className={`px-3 py-1 rounded-full text-sm font-medium border ${statusColors[submissionResult.status] || 'text-gray-600 bg-gray-50 border-gray-200'}`}>
-              {submissionResult.status === 'RUNNING' ? 'Executing...' : submissionResult.status.replace('_', ' ')}
-            </span>
-          </div>
+      <div className={`mt-6 rounded-lg border p-4 ${statusColor}`}>
+        <div className="flex items-center justify-between mb-4">
+          <h4 className="text-lg font-semibold">Submission Result</h4>
+          <span className="px-3 py-1 rounded-full text-sm font-medium bg-opacity-50">
+            {submissionResult.status}
+          </span>
         </div>
         
-        {/* Test case results */}
-        {submissionResult.passedTestCases !== undefined && submissionResult.totalTestCases !== undefined && (
+        {submissionResult.status === 'RUNNING' && (
+          <div className="flex items-center justify-center py-4">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mr-3"></div>
+            <span className="text-blue-600 dark:text-blue-400">Executing your code...</span>
+          </div>
+        )}
+        
+        {(submissionResult.passedTestCases !== undefined && submissionResult.totalTestCases !== undefined) && (
           <div className="mb-3">
-            <div className="flex items-center justify-between text-sm">
+            <div className="flex justify-between mb-1">
               <span className="font-medium text-gray-700 dark:text-gray-300">Test Cases:</span>
               <span className={`font-medium ${submissionResult.passedTestCases === submissionResult.totalTestCases ? 'text-green-600' : 'text-red-600'}`}>
                 {submissionResult.passedTestCases}/{submissionResult.totalTestCases} passed
@@ -380,7 +457,9 @@ function solution() {
             </div>
           </div>
         </div>
-      </div>      {isFullscreen ? (
+      </div>
+      
+      {isFullscreen ? (
         // Fullscreen Code Editor
         <div className="fixed inset-0 z-50 bg-white dark:bg-gray-800">
           <div className="h-full flex flex-col">
@@ -439,109 +518,59 @@ function solution() {
               <div className="text-sm text-gray-500 dark:text-gray-400">
                 Press Ctrl+Enter to submit • F11 for fullscreen • Esc to exit
               </div>
-              <button
-                onClick={handleSubmit}
-                disabled={submitting || !user}
-                className={`px-6 py-2 rounded-lg font-medium transition-colors ${
-                  submitting || !user
-                    ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-                    : 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:shadow-md'
-                }`}
-              >
-                {submitting ? (
-                  <div className="flex items-center">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Submitting...
-                  </div>
-                ) : (
-                  'Submit Solution'
+              <div className="flex space-x-3">
+                {aiAvailable && user && (
+                  <>
+                    <button
+                      onClick={handleGetHint}
+                      disabled={aiLoading || !user}
+                      className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                        aiLoading || !user
+                          ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                          : 'bg-purple-600 hover:bg-purple-700 text-white'
+                      }`}
+                      title="Get a hint for your solution"
+                    >
+                      {aiLoading && hint === null ? (
+                        <div className="flex items-center">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          Getting Hint...
+                        </div>
+                      ) : (
+                        <div className="flex items-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                          </svg>
+                          AI Hint
+                        </div>
+                      )}
+                    </button>
+                    <button
+                      onClick={handleGetCodeReview}
+                      disabled={aiLoading || !user}
+                      className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                        aiLoading || !user
+                          ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                          : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                      }`}
+                      title="Get an AI code review for your solution"
+                    >
+                      {aiLoading && codeReview === null ? (
+                        <div className="flex items-center">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          Reviewing...
+                        </div>
+                      ) : (
+                        <div className="flex items-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                          </svg>
+                          AI Review
+                        </div>
+                      )}
+                    </button>
+                  </>
                 )}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : (
-        // Normal Split Layout
-        <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="grid grid-cols-1 xl:grid-cols-5 gap-8">
-          {/* Problem Description */}
-          <div className="xl:col-span-2 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-            <div className="p-6 space-y-6">
-              <div>
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">Problem Description</h2>
-                <div className="prose max-w-none text-gray-700 dark:text-gray-300">
-                  <p className="whitespace-pre-wrap">{problem.description}</p>
-                </div>
-              </div>
-
-              {renderExamples()}
-              {renderConstraints()}
-            </div>
-          </div>
-
-          {/* Code Editor and Submission */}
-          <div className="xl:col-span-3 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-            <div className="p-6">              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Code Editor</h2>
-                <div className="flex items-center space-x-3">
-                  <button
-                    onClick={() => setIsFullscreen(!isFullscreen)}
-                    className="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
-                    title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
-                  >
-                    {isFullscreen ? (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    ) : (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                      </svg>
-                    )}
-                  </button>
-                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Language:</label>
-                  <select
-                    value={language}
-                    onChange={(e) => updateCodeTemplate(e.target.value)}
-                    className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                  >
-                    <option value="python">Python</option>
-                    <option value="cpp">C++</option>
-                    <option value="java">Java</option>
-                    <option value="javascript">JavaScript</option>
-                  </select>
-                </div>
-              </div><div className="border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
-                <Editor
-                  height="600px"
-                  language={language === 'cpp' ? 'cpp' : language}
-                  value={code}
-                  onChange={setCode}
-                  theme="vs-dark"
-                  options={{
-                    minimap: { enabled: false },
-                    fontSize: 14,
-                    lineNumbers: 'on',
-                    wordWrap: 'on',
-                    automaticLayout: true,
-                    scrollBeyondLastLine: false,
-                    renderLineHighlight: 'line',
-                    selectOnLineNumbers: true,
-                    cursorStyle: 'line',
-                    glyphMargin: false,
-                    folding: true,
-                    lineDecorationsWidth: 0,
-                    lineNumbersMinChars: 3,
-                    tabSize: 2,
-                    insertSpaces: true
-                  }}
-                />
-              </div>
-
-              <div className="mt-6 flex justify-between items-center">
-                <div className="text-sm text-gray-500 dark:text-gray-400">
-                  Press Ctrl+Enter to submit
-                </div>
                 <button
                   onClick={handleSubmit}
                   disabled={submitting || !user}
@@ -561,18 +590,253 @@ function solution() {
                   )}
                 </button>
               </div>
-
-              {!user && (
-                <div className="mt-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-                  <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                    Please log in to submit your solution.
-                  </p>
+            </div>
+            
+            {/* AI Panel for Code Review or Hint in Fullscreen Mode */}
+            {showAiPanel && (codeReview || hint) && (
+              <div className="border-t border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+                  <h3 className="font-medium text-gray-900 dark:text-white flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
+                    {codeReview ? 'AI Code Review' : 'AI Hint'}
+                  </h3>
+                  <button 
+                    onClick={() => setShowAiPanel(false)}
+                    className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </button>
                 </div>
-              )}              {renderSubmissionResult()}
+                <div className="p-4 max-h-[30vh] overflow-y-auto">
+                  <div className="prose prose-sm max-w-none dark:prose-invert">
+                    {codeReview && (
+                      <div className="space-y-4">
+                        <div className="whitespace-pre-wrap">{codeReview}</div>
+                      </div>
+                    )}
+                    {hint && (
+                      <div className="space-y-4">
+                        <div className="whitespace-pre-wrap">{hint}</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        // Normal Split Layout
+        <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="grid grid-cols-1 xl:grid-cols-5 gap-8">
+            {/* Problem Description */}
+            <div className="xl:col-span-2 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+              <div className="p-6 space-y-6">
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">Problem Description</h2>
+                  <div className="prose max-w-none text-gray-700 dark:text-gray-300">
+                    <p className="whitespace-pre-wrap">{problem.description}</p>
+                  </div>
+                </div>
+
+                {renderExamples()}
+                {renderConstraints()}
+              </div>
+            </div>
+
+            {/* Code Editor and Submission */}
+            <div className="xl:col-span-3 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+              <div className="p-6">              
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Code Editor</h2>
+                  <div className="flex items-center space-x-3">
+                    <button
+                      onClick={() => setIsFullscreen(!isFullscreen)}
+                      className="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+                      title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+                    >
+                      {isFullscreen ? (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      ) : (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                        </svg>
+                      )}
+                    </button>
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Language:</label>
+                    <select
+                      value={language}
+                      onChange={(e) => updateCodeTemplate(e.target.value)}
+                      className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                    >
+                      <option value="python">Python</option>
+                      <option value="cpp">C++</option>
+                      <option value="java">Java</option>
+                      <option value="javascript">JavaScript</option>
+                    </select>
+                  </div>
+                </div>
+                
+                <div className="border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
+                  <Editor
+                    height="600px"
+                    language={language === 'cpp' ? 'cpp' : language}
+                    value={code}
+                    onChange={setCode}
+                    theme="vs-dark"
+                    options={{
+                      minimap: { enabled: false },
+                      fontSize: 14,
+                      lineNumbers: 'on',
+                      wordWrap: 'on',
+                      automaticLayout: true,
+                      scrollBeyondLastLine: false,
+                      renderLineHighlight: 'line',
+                      selectOnLineNumbers: true,
+                      cursorStyle: 'line',
+                      glyphMargin: false,
+                      folding: true,
+                      lineDecorationsWidth: 0,
+                      lineNumbersMinChars: 3,
+                      tabSize: 2,
+                      insertSpaces: true
+                    }}
+                  />
+                </div>
+
+                <div className="mt-6 flex justify-between items-center">
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    Press Ctrl+Enter to submit
+                  </div>
+                  <div className="flex space-x-3">
+                    {aiAvailable && user && (
+                      <>
+                        <button
+                          onClick={handleGetHint}
+                          disabled={aiLoading || !user}
+                          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                            aiLoading || !user
+                              ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                              : 'bg-purple-600 hover:bg-purple-700 text-white'
+                          }`}
+                          title="Get a hint for your solution"
+                        >
+                          {aiLoading && hint === null ? (
+                            <div className="flex items-center">
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                              Getting Hint...
+                            </div>
+                          ) : (
+                            <div className="flex items-center">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                              </svg>
+                              AI Hint
+                            </div>
+                          )}
+                        </button>
+                        <button
+                          onClick={handleGetCodeReview}
+                          disabled={aiLoading || !user}
+                          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                            aiLoading || !user
+                              ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                              : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                          }`}
+                          title="Get an AI code review for your solution"
+                        >
+                          {aiLoading && codeReview === null ? (
+                            <div className="flex items-center">
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                              Reviewing...
+                            </div>
+                          ) : (
+                            <div className="flex items-center">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                              </svg>
+                              AI Review
+                            </div>
+                          )}
+                        </button>
+                      </>
+                    )}
+                    <button
+                      onClick={handleSubmit}
+                      disabled={submitting || !user}
+                      className={`px-6 py-2 rounded-lg font-medium transition-colors ${
+                        submitting || !user
+                          ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                          : 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:shadow-md'
+                      }`}
+                    >
+                      {submitting ? (
+                        <div className="flex items-center">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          Submitting...
+                        </div>
+                      ) : (
+                        'Submit Solution'
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {!user && (
+                  <div className="mt-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                    <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                      Please log in to submit your solution.
+                    </p>
+                  </div>
+                )}
+                
+                {/* AI Panel for Code Review or Hint */}
+                {showAiPanel && (codeReview || hint) && (
+                  <div className="mt-6 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg">
+                    <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+                      <h3 className="font-medium text-gray-900 dark:text-white flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                        </svg>
+                        {codeReview ? 'AI Code Review' : 'AI Hint'}
+                      </h3>
+                      <button 
+                        onClick={() => setShowAiPanel(false)}
+                        className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                    </div>
+                    <div className="p-4">
+                      <div className="prose prose-sm max-w-none dark:prose-invert">
+                        {codeReview && (
+                          <div className="space-y-4">
+                            <div className="whitespace-pre-wrap">{codeReview}</div>
+                          </div>
+                        )}
+                        {hint && (
+                          <div className="space-y-4">
+                            <div className="whitespace-pre-wrap">{hint}</div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {renderSubmissionResult()}
+              </div>
             </div>
           </div>
         </div>
-      </div>
       )}
     </div>
   );

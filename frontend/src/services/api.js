@@ -63,10 +63,18 @@ export const profileAPI = {
   updateAvatar: (data) => axios.put('/api/profile/avatar', data)
 };
 
+// AI API
+export const aiAPI = {
+  getStatus: () => axios.get('/api/ai/status'),
+  getCodeReview: (data) => axios.post('/api/ai/code-review', data),
+  getHint: (data) => axios.post('/api/ai/hint', data)
+};
+
 export default {
   problems: problemsAPI,
   submissions: submissionsAPI,
   admin: adminAPI,
   auth: authAPI,
-  profile: profileAPI
+  profile: profileAPI,
+  ai: aiAPI
 };
