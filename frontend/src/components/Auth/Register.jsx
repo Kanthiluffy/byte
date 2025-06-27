@@ -121,7 +121,7 @@ const Register = () => {
                 name="name"
                 value={formData.name}
                 onChange={handleChange}
-                className={`w-full px-4 py-3 rounded-lg border transition-colors duration-200 ${
+                className={`w-full px-4 py-3 rounded-lg border transition-colors duration-200 text-gray-900 ${
                   errors.name 
                     ? 'border-red-300 focus:border-red-500 focus:ring-red-500' 
                     : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
@@ -143,7 +143,7 @@ const Register = () => {
                 name="email"
                 value={formData.email}
                 onChange={handleChange}
-                className={`w-full px-4 py-3 rounded-lg border transition-colors duration-200 ${
+                className={`w-full px-4 py-3 rounded-lg border transition-colors duration-200 text-gray-900 ${
                   errors.email 
                     ? 'border-red-300 focus:border-red-500 focus:ring-red-500' 
                     : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
@@ -165,7 +165,7 @@ const Register = () => {
                 name="password"
                 value={formData.password}
                 onChange={handleChange}
-                className={`w-full px-4 py-3 rounded-lg border transition-colors duration-200 ${
+                className={`w-full px-4 py-3 rounded-lg border transition-colors duration-200 text-gray-900 ${
                   errors.password 
                     ? 'border-red-300 focus:border-red-500 focus:ring-red-500' 
                     : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
@@ -187,7 +187,7 @@ const Register = () => {
                 name="confirmPassword"
                 value={formData.confirmPassword}
                 onChange={handleChange}
-                className={`w-full px-4 py-3 rounded-lg border transition-colors duration-200 ${
+                className={`w-full px-4 py-3 rounded-lg border transition-colors duration-200 text-gray-900 ${
                   errors.confirmPassword 
                     ? 'border-red-300 focus:border-red-500 focus:ring-red-500' 
                     : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
