@@ -67,7 +67,13 @@ export const profileAPI = {
 export const aiAPI = {
   getStatus: () => axios.get('/api/ai/status'),
   getCodeReview: (data) => axios.post('/api/ai/code-review', data),
-  getHint: (data) => axios.post('/api/ai/hint', data)
+  getHint: (data) => axios.post('/api/ai/hint', data),
+  
+  // AI Tutor endpoints
+  startTutorSession: (data) => axios.post('/api/ai/tutor/start', data),
+  chatWithTutor: (data) => axios.post('/api/ai/tutor/chat', data),
+  getTutorHistory: (sessionId) => axios.get(`/api/ai/tutor/history/${sessionId}`),
+  endTutorSession: (data) => axios.post('/api/ai/tutor/end', data)
 };
 
 export default {

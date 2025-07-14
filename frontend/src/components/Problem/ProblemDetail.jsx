@@ -4,6 +4,8 @@ import { Editor } from '@monaco-editor/react';
 import toast from 'react-hot-toast';
 import { problemsAPI, submissionsAPI, aiAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import AITutor from './AITutor';
+import Analytics from '../../utils/analytics';
 
 const ProblemDetail = () => {
   const { id } = useParams();
@@ -21,11 +23,41 @@ const ProblemDetail = () => {
   const [codeReview, setCodeReview] = useState(null);
   const [hint, setHint] = useState(null);
   const [showAiPanel, setShowAiPanel] = useState(false);
+  const [showTutor, setShowTutor] = useState(false);
+  const [tutorCompleted, setTutorCompleted] = useState(false);
+  const [aiCheckComplete, setAiCheckComplete] = useState(false);
   
   useEffect(() => {
     fetchProblem();
     checkAiAvailability();
   }, [id]);
+  
+  // Separate effect to handle tutor completion logic after AI availability is checked
+  useEffect(() => {
+    if (!aiCheckComplete) return; // Wait for AI check to complete
+    
+    console.log('Tutor logic:', { user: !!user, id, aiAvailable, aiCheckComplete });
+    
+    // Check if user has completed tutor for this problem before
+    if (user && id && aiAvailable) {
+      const tutorKey = `tutor_completed_${user.id}_${id}`;
+      const hasCompletedBefore = localStorage.getItem(tutorKey) === 'true';
+      console.log('Checking localStorage:', tutorKey, hasCompletedBefore);
+      if (hasCompletedBefore) {
+        setTutorCompleted(true);
+        return;
+      }
+    }
+    
+    // If user is not logged in or AI is not available, mark tutor as completed
+    if (!user || !aiAvailable) {
+      console.log('Auto-completing tutor:', { user: !!user, aiAvailable });
+      setTutorCompleted(true);
+    } else {
+      console.log('Tutor should be available');
+      setTutorCompleted(false);
+    }
+  }, [id, user, aiAvailable, aiCheckComplete]);
   
   // Keyboard shortcuts
   useEffect(() => {
@@ -33,14 +65,16 @@ const ProblemDetail = () => {
       // Ctrl+Enter to submit
       if (e.ctrlKey && e.key === 'Enter') {
         e.preventDefault();
-        if (!submitting && user) {
+        if (!submitting && user && (tutorCompleted || !aiAvailable)) {
           handleSubmit();
         }
       }
       // F11 for fullscreen
       if (e.key === 'F11') {
         e.preventDefault();
-        setIsFullscreen(!isFullscreen);
+        if (tutorCompleted || !aiAvailable || !user) {
+          setIsFullscreen(!isFullscreen);
+        }
       }
       // Escape to exit fullscreen
       if (e.key === 'Escape' && isFullscreen) {
@@ -51,7 +85,7 @@ const ProblemDetail = () => {
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [submitting, user, isFullscreen]);
+  }, [submitting, user, isFullscreen, tutorCompleted, aiAvailable]);
 
   const fetchProblem = async () => {
     try {
@@ -59,6 +93,14 @@ const ProblemDetail = () => {
       const response = await problemsAPI.getById(id);
       setProblem(response.data);
       updateCodeTemplate('python');
+      
+      // Track problem view
+      Analytics.track('problem_viewed', { 
+        problemId: id, 
+        problemTitle: response.data?.title,
+        difficulty: response.data?.difficulty,
+        userId: user?.id 
+      });
     } catch (err) {
       setError('Failed to fetch problem details');
       console.error(err);
@@ -99,6 +141,11 @@ function solution() {
   const handleSubmit = async () => {
     if (!code.trim()) {
       toast.error('Please write some code before submitting');
+      return;
+    }
+
+    if (!tutorCompleted && aiAvailable && user) {
+      toast.error('Please complete the tutoring session first or skip it to start coding');
       return;
     }
 
@@ -143,6 +190,8 @@ function solution() {
     } catch (error) {
       console.error('Failed to check AI availability:', error);
       setAiAvailable(false);
+    } finally {
+      setAiCheckComplete(true);
     }
   };
 
@@ -203,6 +252,63 @@ function solution() {
     } finally {
       setAiLoading(false);
     }
+  };
+
+  const handleStartTutor = () => {
+    setShowTutor(true);
+    Analytics.track('tutor_started', { 
+      problemId: id, 
+      problemTitle: problem?.title,
+      userId: user?.id 
+    });
+  };
+
+  const handleTutorComplete = () => {
+    setShowTutor(false);
+    setTutorCompleted(true);
+    
+    // Save completion status for this user and problem
+    if (user && id) {
+      const tutorKey = `tutor_completed_${user.id}_${id}`;
+      localStorage.setItem(tutorKey, 'true');
+    }
+    
+    Analytics.track('tutor_completed', { 
+      problemId: id, 
+      problemTitle: problem?.title,
+      userId: user?.id 
+    });
+    
+    toast.success('Great! Now you can start coding your solution.');
+  };
+
+  const handleSkipTutor = () => {
+    setTutorCompleted(true);
+    
+    // Save completion status for this user and problem
+    if (user && id) {
+      const tutorKey = `tutor_completed_${user.id}_${id}`;
+      localStorage.setItem(tutorKey, 'true');
+    }
+    
+    Analytics.track('tutor_skipped', { 
+      problemId: id, 
+      problemTitle: problem?.title,
+      userId: user?.id 
+    });
+    
+    toast.info('Tutor skipped. You can start coding directly.');
+  };
+
+  // Debug function to reset tutor state
+  const resetTutorState = () => {
+    setTutorCompleted(false);
+    setShowTutor(false);
+    if (user && id) {
+      const tutorKey = `tutor_completed_${user.id}_${id}`;
+      localStorage.removeItem(tutorKey);
+    }
+    toast.info('Tutor state reset. Refresh the page to see the tutor prompt.');
   };
 
   const pollSubmissionResult = async (submissionId, attempts = 0) => {
@@ -632,6 +738,15 @@ function solution() {
       ) : (
         // Normal Split Layout
         <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* AI Tutor Modal */}
+          {showTutor && (
+            <AITutor 
+              problem={problem}
+              onStartCoding={handleTutorComplete}
+              onClose={() => setShowTutor(false)}
+            />
+          )}
+
           <div className="grid grid-cols-1 xl:grid-cols-5 gap-8">
             {/* Problem Description */}
             <div className="xl:col-span-2 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
@@ -650,14 +765,96 @@ function solution() {
 
             {/* Code Editor and Submission */}
             <div className="xl:col-span-3 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-              <div className="p-6">              
+              <div className="p-6">
+                {/* AI Tutor Introduction */}
+                {!tutorCompleted && aiAvailable && user && (
+                  <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6">
+                    <div className="flex items-start space-x-4">
+                      <div className="flex-shrink-0">
+                        <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
+                          <svg className="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                          </svg>
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-2">
+                          🤖 AI Personal Tutor Available
+                        </h3>
+                        <p className="text-blue-800 dark:text-blue-200 mb-4">
+                          Before you start coding, would you like to discuss your approach with our AI tutor? 
+                          The tutor can help you understand the problem, brainstorm solutions, and guide you through the thinking process.
+                        </p>
+                        <div className="flex space-x-3">
+                          <button
+                            onClick={handleStartTutor}
+                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center"
+                          >
+                            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                            </svg>
+                            Start Tutoring Session
+                          </button>
+                          <button
+                            onClick={handleSkipTutor}
+                            className="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-medium transition-colors"
+                          >
+                            Skip & Code Directly
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {tutorCompleted && (
+                  <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                    <div className="flex items-center">
+                      <svg className="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span className="text-green-800 dark:text-green-200 text-sm font-medium">
+                        Ready to code! You can still use AI hints and code review while coding.
+                      </span>
+                      <div className="ml-auto flex space-x-2">
+                        {aiAvailable && (
+                          <button
+                            onClick={() => {
+                              setTutorCompleted(false);
+                              // Clear localStorage for this problem
+                              if (user && id) {
+                                const tutorKey = `tutor_completed_${user.id}_${id}`;
+                                localStorage.removeItem(tutorKey);
+                              }
+                              setShowTutor(true);
+                            }}
+                            className="text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300 text-sm font-medium"
+                          >
+                            Restart Tutor
+                          </button>
+                        )}
+                        <button
+                          onClick={resetTutorState}
+                          className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium"
+                        >
+                          Reset & Refresh
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}              
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Code Editor</h2>
                   <div className="flex items-center space-x-3">
                     <button
                       onClick={() => setIsFullscreen(!isFullscreen)}
-                      className="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
-                      title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+                      disabled={!tutorCompleted && aiAvailable && user}
+                      className={`p-1 transition-colors ${
+                        !tutorCompleted && aiAvailable && user
+                          ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
+                          : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                      }`}
+                      title={!tutorCompleted && aiAvailable && user ? "Complete tutoring first" : (isFullscreen ? "Exit Fullscreen" : "Fullscreen")}
                     >
                       {isFullscreen ? (
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -673,7 +870,10 @@ function solution() {
                     <select
                       value={language}
                       onChange={(e) => updateCodeTemplate(e.target.value)}
-                      className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                      disabled={!tutorCompleted && aiAvailable && user}
+                      className={`px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white ${
+                        !tutorCompleted && aiAvailable && user ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
                     >
                       <option value="python">Python</option>
                       <option value="cpp">C++</option>
@@ -683,7 +883,36 @@ function solution() {
                   </div>
                 </div>
                 
-                <div className="border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
+                <div className="border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden relative">
+                  {!tutorCompleted && aiAvailable && user && (
+                    <div className="absolute inset-0 bg-gray-100/80 dark:bg-gray-800/80 backdrop-blur-sm z-10 flex items-center justify-center">
+                      <div className="text-center p-6">
+                        <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <svg className="w-8 h-8 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                          </svg>
+                        </div>
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Code Editor Locked</h3>
+                        <p className="text-gray-600 dark:text-gray-400 mb-4">
+                          Start a tutoring session or skip to unlock the code editor
+                        </p>
+                        <div className="flex space-x-3 justify-center">
+                          <button
+                            onClick={handleStartTutor}
+                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+                          >
+                            Start Tutor
+                          </button>
+                          <button
+                            onClick={handleSkipTutor}
+                            className="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-medium transition-colors"
+                          >
+                            Skip
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   <Editor
                     height="600px"
                     language={language === 'cpp' ? 'cpp' : language}
@@ -712,10 +941,14 @@ function solution() {
 
                 <div className="mt-6 flex justify-between items-center">
                   <div className="text-sm text-gray-500 dark:text-gray-400">
-                    Press Ctrl+Enter to submit
+                    {!tutorCompleted && aiAvailable && user ? (
+                      "Complete tutoring session to start coding"
+                    ) : (
+                      "Press Ctrl+Enter to submit"
+                    )}
                   </div>
                   <div className="flex space-x-3">
-                    {aiAvailable && user && (
+                    {aiAvailable && user && tutorCompleted && (
                       <>
                         <button
                           onClick={handleGetHint}
@@ -769,12 +1002,13 @@ function solution() {
                     )}
                     <button
                       onClick={handleSubmit}
-                      disabled={submitting || !user}
+                      disabled={submitting || !user || (!tutorCompleted && aiAvailable && user)}
                       className={`px-6 py-2 rounded-lg font-medium transition-colors ${
-                        submitting || !user
+                        submitting || !user || (!tutorCompleted && aiAvailable && user)
                           ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
                           : 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:shadow-md'
                       }`}
+                      title={!tutorCompleted && aiAvailable && user ? "Complete tutoring session first" : ""}
                     >
                       {submitting ? (
                         <div className="flex items-center">
@@ -791,7 +1025,7 @@ function solution() {
                 {!user && (
                   <div className="mt-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
                     <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                      Please log in to submit your solution.
+                      Please log in to access the AI tutor and submit your solution.
                     </p>
                   </div>
                 )}
