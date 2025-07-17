@@ -76,11 +76,27 @@ export const aiAPI = {
   endTutorSession: (data) => axios.post('/api/ai/tutor/end', data)
 };
 
+// Speech API
+export const speechAPI = {
+  test: () => axios.post('/api/speech/test'),
+  transcribe: (audioBlob) => {
+    const formData = new FormData();
+    formData.append('audio', audioBlob, 'recording.webm');
+    
+    return axios.post('/api/speech/transcribe', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  }
+};
+
 export default {
   problems: problemsAPI,
   submissions: submissionsAPI,
   admin: adminAPI,
   auth: authAPI,
   profile: profileAPI,
-  ai: aiAPI
+  ai: aiAPI,
+  speech: speechAPI
 };

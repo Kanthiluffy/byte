@@ -1,17 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { aiAPI } from '../../services/api';
-import VoiceManager from '../../utils/voiceManager';
+import WhisperVoiceManager from '../../utils/whisperVoiceManager';
 
 const AITutor = ({ problem, onClose, onStartCoding }) => {
   const [sessionId, setSessionId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isListening, setIsListening] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
-  const [interimTranscript, setInterimTranscript] = useState('');
+  const [recordingProgress, setRecordingProgress] = useState(false);
   const [sessionStarted, setSessionStarted] = useState(false);
   
   const voiceManagerRef = useRef(null);
@@ -19,23 +19,41 @@ const AITutor = ({ problem, onClose, onStartCoding }) => {
   const textareaRef = useRef(null);
 
   useEffect(() => {
-    // Initialize voice manager only if supported
-    try {
-      voiceManagerRef.current = new VoiceManager();
-      if (voiceManagerRef.current.isSupported()) {
-        setVoiceEnabled(true);
+    // Initialize Whisper voice manager
+    const initializeVoice = async () => {
+      try {
+        voiceManagerRef.current = new WhisperVoiceManager();
+        
+        const isSupported = await voiceManagerRef.current.isSupported();
+        
+        if (isSupported) {
+          setVoiceEnabled(true);
+        } else {
+          setVoiceEnabled(false);
+          console.warn('Whisper voice recording not available - microphone access required');
+        }
+      } catch (error) {
+        console.warn('Voice features not available:', error);
+        setVoiceEnabled(false);
       }
-    } catch (error) {
-      console.warn('Voice features not available:', error);
-      setVoiceEnabled(false);
-    }
+    };
     
+    initializeVoice();
     startTutorSession();
   }, []);
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (voiceManagerRef.current) {
+        voiceManagerRef.current.cleanup();
+      }
+    };
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -159,43 +177,90 @@ const AITutor = ({ problem, onClose, onStartCoding }) => {
     );
   };
 
-  const startVoiceInput = () => {
-    if (!voiceManagerRef.current || isListening) return;
+  const startVoiceInput = async () => {
+    if (!voiceManagerRef.current || isRecording) return;
 
-    voiceManagerRef.current.startListening(
-      (final, interim) => {
-        setInputMessage(final);
-        setInterimTranscript(interim);
+    console.log('Starting voice recording...');
+    setIsRecording(true);
+
+    await voiceManagerRef.current.startRecording(
+      (progress) => {
+        setRecordingProgress(progress);
       },
       (error) => {
-        console.error('Speech recognition error:', error);
-        if (error === 'network') {
-          toast.error('Voice recognition requires internet connection');
-        } else if (error === 'not-allowed') {
-          toast.error('Please allow microphone access for voice input');
+        console.error('Recording error:', error);
+        setIsRecording(false);
+        setRecordingProgress(false);
+        
+        if (error === 'microphone-denied') {
+          toast.error('Please allow microphone access to use voice input');
+        } else if (error === 'microphone-not-found') {
+          toast.error('No microphone found - please check your audio devices');
+        } else if (error === 'recording-failed') {
+          toast.error('Failed to start recording - please try again');
         } else {
-          toast.error('Voice recognition failed - please type your message');
+          toast.error('Voice recording failed - please type your message instead');
         }
-        setIsListening(false);
-        setInterimTranscript('');
       },
-      (finalText) => {
-        setIsListening(false);
-        setInterimTranscript('');
-        if (finalText.trim()) {
-          setInputMessage(finalText);
+      (transcript, confidence) => {
+        console.log('Voice transcription completed:', transcript);
+        setIsRecording(false);
+        setRecordingProgress(false);
+        
+        if (transcript && transcript.trim()) {
+          setInputMessage(transcript.trim());
+          toast.success(`Voice input recorded! Confidence: ${Math.round(confidence * 100)}%`);
+        } else {
+          toast('No speech detected - please try speaking again', { icon: '🎤' });
         }
       }
     );
-    
-    setIsListening(true);
   };
 
-  const stopVoiceInput = () => {
-    if (voiceManagerRef.current) {
-      voiceManagerRef.current.stopListening();
-      setIsListening(false);
-      setInterimTranscript('');
+  const stopVoiceInput = async () => {
+    if (!voiceManagerRef.current || !isRecording) return;
+
+    console.log('Stopping voice recording...');
+    
+    try {
+      await voiceManagerRef.current.stopRecording(
+        (transcript, confidence) => {
+          console.log('Voice transcription completed:', transcript);
+          setIsRecording(false);
+          setRecordingProgress(false);
+          
+          if (transcript && transcript.trim()) {
+            setInputMessage(transcript.trim());
+            toast.success(`Voice input recorded! Confidence: ${Math.round(confidence * 100)}%`);
+          } else {
+            toast('No speech detected in recording', { icon: '🎤' });
+          }
+        },
+        (error) => {
+          console.error('Stop recording error:', error);
+          setIsRecording(false);
+          setRecordingProgress(false);
+          
+          if (error === 'transcription-failed') {
+            toast.error('Failed to transcribe speech - please try again');
+          } else if (error === 'network-error') {
+            toast.error('Network error during transcription - check your connection');
+          } else if (error === 'authentication-required') {
+            toast.error('Please log in to use voice features');
+          } else if (error === 'service-not-available') {
+            toast.error('Speech service not available - please try again later');
+          } else if (error === 'invalid-audio') {
+            toast.error('Invalid audio format - please try recording again');
+          } else {
+            toast.error('Failed to process voice input - please try again');
+          }
+        }
+      );
+    } catch (error) {
+      console.error('Error stopping recording:', error);
+      setIsRecording(false);
+      setRecordingProgress(false);
+      toast.error('Failed to stop recording');
     }
   };
 
@@ -365,34 +430,58 @@ const AITutor = ({ problem, onClose, onStartCoding }) => {
             <div className="flex-1 relative">
               <textarea
                 ref={textareaRef}
-                value={inputMessage + interimTranscript}
+                value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
                 onKeyPress={handleKeyPress}
                 placeholder="Share your approach or ask questions..."
                 className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
                 rows="2"
-                disabled={isLoading}
+                disabled={isLoading || isRecording}
               />
               
-              {interimTranscript && (
-                <div className="absolute bottom-2 right-2 text-xs text-gray-400 italic">
-                  Listening...
+              {isRecording && (
+                <div className="absolute bottom-2 right-2 flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                  <span className="text-xs text-red-500 font-medium">Recording...</span>
                 </div>
               )}
             </div>
             
             <div className="flex flex-col space-y-2">
               {/* Voice input button */}
-              {voiceEnabled && (
+              {voiceEnabled ? (
                 <button
                   type="button"
-                  onClick={isListening ? stopVoiceInput : startVoiceInput}
-                  className={`p-3 rounded-lg transition-colors ${
-                    isListening
+                  onClick={isRecording ? stopVoiceInput : startVoiceInput}
+                  className={`p-3 rounded-lg transition-colors relative ${
+                    isRecording
                       ? 'bg-red-600 hover:bg-red-700 text-white'
                       : 'bg-purple-600 hover:bg-purple-700 text-white'
                   }`}
                   disabled={isLoading}
+                  title={isRecording ? 'Stop recording' : 'Start voice recording'}
+                >
+                  {isRecording ? (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                    </svg>
+                  )}
+                  
+                  {isRecording && (
+                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-400 rounded-full animate-ping"></div>
+                  )}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="p-3 bg-gray-400 text-white rounded-lg cursor-not-allowed"
+                  disabled
+                  title="Voice input requires microphone permissions"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
@@ -403,7 +492,7 @@ const AITutor = ({ problem, onClose, onStartCoding }) => {
               {/* Send button */}
               <button
                 type="submit"
-                disabled={isLoading || !inputMessage.trim()}
+                disabled={isLoading || !inputMessage.trim() || isRecording}
                 className="p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -428,6 +517,18 @@ const AITutor = ({ problem, onClose, onStartCoding }) => {
                     Stop Speaking
                   </div>
                 </button>
+              )}
+              
+              {!voiceEnabled && (
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  💡 Voice features require microphone access
+                </div>
+              )}
+              
+              {isRecording && (
+                <div className="text-xs text-purple-600 dark:text-purple-400 font-medium">
+                  🎤 Recording... Click the red button to stop
+                </div>
               )}
             </div>
             

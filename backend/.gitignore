@@ -74,3 +74,8 @@ jspm_packages/
 
 # Static files
 public/
+
+# Temporary files
+temp/
+*.tmp
+*.temp

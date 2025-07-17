@@ -36,13 +36,10 @@ const ProblemDetail = () => {
   useEffect(() => {
     if (!aiCheckComplete) return; // Wait for AI check to complete
     
-    console.log('Tutor logic:', { user: !!user, id, aiAvailable, aiCheckComplete });
-    
     // Check if user has completed tutor for this problem before
     if (user && id && aiAvailable) {
       const tutorKey = `tutor_completed_${user.id}_${id}`;
       const hasCompletedBefore = localStorage.getItem(tutorKey) === 'true';
-      console.log('Checking localStorage:', tutorKey, hasCompletedBefore);
       if (hasCompletedBefore) {
         setTutorCompleted(true);
         return;
@@ -51,10 +48,8 @@ const ProblemDetail = () => {
     
     // If user is not logged in or AI is not available, mark tutor as completed
     if (!user || !aiAvailable) {
-      console.log('Auto-completing tutor:', { user: !!user, aiAvailable });
       setTutorCompleted(true);
     } else {
-      console.log('Tutor should be available');
       setTutorCompleted(false);
     }
   }, [id, user, aiAvailable, aiCheckComplete]);
