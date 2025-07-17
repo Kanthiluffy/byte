@@ -23,18 +23,74 @@ class WhisperService {
       // Create environment with updated PATH
       const env = { ...process.env };
       
-      // Use simple import check instead of --help (which has encoding issues on Windows)
-      const pythonWhisper = spawn('python', ['-c', '"import whisper; print(\\"available\\")"'], { 
+      // Try multiple approaches to check Whisper availability
+      // First try: Simple import check
+      const pythonWhisper = spawn('python3', ['-c', 'import whisper; print("available")'], { 
         env: env,
-        shell: true  // Use shell to ensure PATH is properly resolved
+        shell: true,
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+      
+      let stdout = '';
+      let stderr = '';
+      
+      pythonWhisper.stdout.on('data', (data) => {
+        stdout += data.toString();
+      });
+      
+      pythonWhisper.stderr.on('data', (data) => {
+        stderr += data.toString();
       });
       
       pythonWhisper.on('close', (code) => {
-        resolve(code === 0);
+        if (code === 0 && stdout.includes('available')) {
+          resolve(true);
+          return;
+        }
+        
+        // Fallback: Try with 'python' instead of 'python3'
+        const pythonFallback = spawn('python', ['-c', 'import whisper; print("available")'], { 
+          env: env,
+          shell: true,
+          stdio: ['pipe', 'pipe', 'pipe']
+        });
+        
+        let fallbackStdout = '';
+        
+        pythonFallback.stdout.on('data', (data) => {
+          fallbackStdout += data.toString();
+        });
+        
+        pythonFallback.on('close', (fallbackCode) => {
+          resolve(fallbackCode === 0 && fallbackStdout.includes('available'));
+        });
+        
+        pythonFallback.on('error', (error) => {
+          resolve(false);
+        });
       });
       
       pythonWhisper.on('error', (error) => {
-        resolve(false);
+        // Try fallback with 'python' command
+        const pythonFallback = spawn('python', ['-c', 'import whisper; print("available")'], { 
+          env: env,
+          shell: true,
+          stdio: ['pipe', 'pipe', 'pipe']
+        });
+        
+        let fallbackStdout = '';
+        
+        pythonFallback.stdout.on('data', (data) => {
+          fallbackStdout += data.toString();
+        });
+        
+        pythonFallback.on('close', (fallbackCode) => {
+          resolve(fallbackCode === 0 && fallbackStdout.includes('available'));
+        });
+        
+        pythonFallback.on('error', (fallbackError) => {
+          resolve(false);
+        });
       });
     });
   }
@@ -42,10 +98,15 @@ class WhisperService {
   // Transcribe audio using Whisper CLI directly
   async transcribeAudio(audioFilePath) {
     try {
+      console.log('Starting transcription for:', audioFilePath);
+      
       // Check if Whisper is available
       const whisperAvailable = await this.checkWhisperAvailability();
       
+      console.log('Whisper availability check result:', whisperAvailable);
+      
       if (!whisperAvailable) {
+        console.log('Whisper not available, returning placeholder response');
         // Return placeholder response if Whisper is not installed
         await this.cleanupFile(audioFilePath);
         return {
@@ -56,6 +117,8 @@ class WhisperService {
           usingPlaceholder: true
         };
       }
+
+      console.log('Whisper available, proceeding with transcription');
 
       // Use Whisper CLI directly
       const result = await this.runWhisperCLI(audioFilePath);
@@ -90,40 +153,61 @@ class WhisperService {
       // Create environment with updated PATH
       const env = { ...process.env };
       
-      // Use python -m whisper directly (since we know this works)
-      const whisperArgs = [
-        '-m', 'whisper',
-        audioFilePath,
-        '--model', model,
-        '--output_format', 'json',
-        '--output_dir', this.tempDir,
-        '--verbose', 'False'
-      ];
-
-      const whisper = spawn('python', whisperArgs, { 
-        env: env,
-        shell: true  // Use shell to ensure PATH is properly resolved
-      });
+      // Try python3 first, then python as fallback
+      const pythonCommands = ['python3', 'python'];
       
-      let stdout = '';
-      let stderr = '';
+      const tryPythonCommand = (commandIndex) => {
+        if (commandIndex >= pythonCommands.length) {
+          reject(new Error('Failed to run Whisper: No working Python command found'));
+          return;
+        }
+        
+        const pythonCmd = pythonCommands[commandIndex];
+        
+        // Use python -m whisper directly (since we know this works)
+        const whisperArgs = [
+          '-m', 'whisper',
+          audioFilePath,
+          '--model', model,
+          '--output_format', 'json',
+          '--output_dir', this.tempDir,
+          '--verbose', 'False'
+        ];
 
-      whisper.stdout.on('data', (data) => {
-        stdout += data.toString();
-      });
+        const whisper = spawn(pythonCmd, whisperArgs, { 
+          env: env,
+          shell: true,
+          stdio: ['pipe', 'pipe', 'pipe']
+        });
+        
+        let stdout = '';
+        let stderr = '';
 
-      whisper.stderr.on('data', (data) => {
-        stderr += data.toString();
-      });
+        whisper.stdout.on('data', (data) => {
+          stdout += data.toString();
+        });
 
-      whisper.on('close', (code) => {
-        this.handleWhisperResult(code, stdout, stderr, audioFilePath, startTime, resolve, reject);
-      });
+        whisper.stderr.on('data', (data) => {
+          stderr += data.toString();
+        });
 
-      whisper.on('error', (error) => {
-        console.error('Failed to run Whisper:', error.message);
-        reject(new Error(`Failed to run Whisper: ${error.message}`));
-      });
+        whisper.on('close', (code) => {
+          if (code === 0) {
+            this.handleWhisperResult(code, stdout, stderr, audioFilePath, startTime, resolve, reject);
+          } else {
+            // Try next python command
+            tryPythonCommand(commandIndex + 1);
+          }
+        });
+
+        whisper.on('error', (error) => {
+          // Try next python command
+          tryPythonCommand(commandIndex + 1);
+        });
+      };
+      
+      // Start with the first python command
+      tryPythonCommand(0);
     });
   }
 
