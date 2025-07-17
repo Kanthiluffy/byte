@@ -23,90 +23,89 @@ class WhisperService {
       // Create environment with updated PATH
       const env = { ...process.env };
       
-      // Try multiple approaches to check Whisper availability
-      // First try: Simple import check
-      const pythonWhisper = spawn('python3', ['-c', 'import whisper; print("available")'], { 
-        env: env,
-        shell: true,
-        stdio: ['pipe', 'pipe', 'pipe']
-      });
+      // Try multiple Python commands in order of preference
+      const pythonCommands = ['python', 'python3', 'py'];
       
-      let stdout = '';
-      let stderr = '';
-      
-      pythonWhisper.stdout.on('data', (data) => {
-        stdout += data.toString();
-      });
-      
-      pythonWhisper.stderr.on('data', (data) => {
-        stderr += data.toString();
-      });
-      
-      pythonWhisper.on('close', (code) => {
-        if (code === 0 && stdout.includes('available')) {
-          resolve(true);
+      const tryPythonCommand = async (commandIndex) => {
+        if (commandIndex >= pythonCommands.length) {
+          resolve(false);
           return;
         }
         
-        // Fallback: Try with 'python' instead of 'python3'
-        const pythonFallback = spawn('python', ['-c', 'import whisper; print("available")'], { 
-          env: env,
-          shell: true,
-          stdio: ['pipe', 'pipe', 'pipe']
-        });
+        const pythonCmd = pythonCommands[commandIndex];
         
-        let fallbackStdout = '';
+        // Simple import check - use temporary file to avoid command line parsing issues
+        const testScriptPath = path.join(this.tempDir, 'whisper_test.py');
+        const testScript = 'import whisper\nprint("available")\n';
         
-        pythonFallback.stdout.on('data', (data) => {
-          fallbackStdout += data.toString();
-        });
-        
-        pythonFallback.on('close', (fallbackCode) => {
-          resolve(fallbackCode === 0 && fallbackStdout.includes('available'));
-        });
-        
-        pythonFallback.on('error', (error) => {
-          resolve(false);
-        });
-      });
+        try {
+          // Write test script
+          await fs.writeFile(testScriptPath, testScript);
+          
+          const pythonWhisper = spawn(pythonCmd, [testScriptPath], { 
+            env: env,
+            shell: true,
+            stdio: ['pipe', 'pipe', 'pipe']
+          });
+          
+          let stdout = '';
+          let stderr = '';
+          
+          pythonWhisper.stdout.on('data', (data) => {
+            stdout += data.toString();
+          });
+          
+          pythonWhisper.stderr.on('data', (data) => {
+            stderr += data.toString();
+          });
+          
+          pythonWhisper.on('close', async (code) => {
+            // Clean up test script
+            try {
+              await fs.unlink(testScriptPath);
+            } catch (error) {
+              // Ignore cleanup errors
+            }
+            
+            if (code === 0 && stdout.includes('available')) {
+              resolve(true);
+              return;
+            }
+            
+            // Try next python command
+            tryPythonCommand(commandIndex + 1);
+          });
+          
+          pythonWhisper.on('error', async (error) => {
+            // Clean up test script
+            try {
+              await fs.unlink(testScriptPath);
+            } catch (cleanupError) {
+              // Ignore cleanup errors
+            }
+            
+            // Try next python command
+            tryPythonCommand(commandIndex + 1);
+          });
+          
+        } catch (error) {
+          // Try next python command
+          tryPythonCommand(commandIndex + 1);
+        }
+      };
       
-      pythonWhisper.on('error', (error) => {
-        // Try fallback with 'python' command
-        const pythonFallback = spawn('python', ['-c', 'import whisper; print("available")'], { 
-          env: env,
-          shell: true,
-          stdio: ['pipe', 'pipe', 'pipe']
-        });
-        
-        let fallbackStdout = '';
-        
-        pythonFallback.stdout.on('data', (data) => {
-          fallbackStdout += data.toString();
-        });
-        
-        pythonFallback.on('close', (fallbackCode) => {
-          resolve(fallbackCode === 0 && fallbackStdout.includes('available'));
-        });
-        
-        pythonFallback.on('error', (fallbackError) => {
-          resolve(false);
-        });
-      });
+      // Start with the first python command
+      tryPythonCommand(0);
     });
   }
 
   // Transcribe audio using Whisper CLI directly
   async transcribeAudio(audioFilePath) {
     try {
-      console.log('Starting transcription for:', audioFilePath);
-      
       // Check if Whisper is available
       const whisperAvailable = await this.checkWhisperAvailability();
       
-      console.log('Whisper availability check result:', whisperAvailable);
-      
       if (!whisperAvailable) {
-        console.log('Whisper not available, returning placeholder response');
         // Return placeholder response if Whisper is not installed
         await this.cleanupFile(audioFilePath);
         return {
@@ -117,8 +116,6 @@ class WhisperService {
           usingPlaceholder: true
         };
       }
-
-      console.log('Whisper available, proceeding with transcription');
 
       // Use Whisper CLI directly
       const result = await this.runWhisperCLI(audioFilePath);
@@ -153,8 +150,8 @@ class WhisperService {
       // Create environment with updated PATH
       const env = { ...process.env };
       
-      // Try python3 first, then python as fallback
-      const pythonCommands = ['python3', 'python'];
+      // Try python first, then python3 as fallback (matching availability check)
+      const pythonCommands = ['python', 'python3', 'py'];
       
       const tryPythonCommand = (commandIndex) => {
         if (commandIndex >= pythonCommands.length) {
